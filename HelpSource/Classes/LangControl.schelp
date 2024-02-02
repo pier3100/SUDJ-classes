@@ -1,0 +1,7 @@
+CLASS:: LangControl
+SUMMARY:: Language side controller as part of MidiHidSystem
+RELATED:: Guides/MidiHidSystem-Guide
+CATEGORIES:: External Control>MIDI, External Control>HID
+
+DESCRIPTION::
+This object takes care of connecting to a macroBus.

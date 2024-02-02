@@ -1,0 +1,7 @@
+CLASS:: AbstractMidiButton
+SUMMARY:: AbstractMidiButton
+RELATED:: Guides/MidiHidSystem-Guide
+CATEGORIES:: External Control>MIDI
+
+DESCRIPTION::
+This allows for mappings button to noto on/off messages. It takes a midi source as first input, and one or two targets as second and third input, for respectively note on and off messages. Use it together with an appropriate target.

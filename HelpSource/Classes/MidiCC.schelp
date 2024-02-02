@@ -1,0 +1,9 @@
+CLASS:: MidiCC
+SUMMARY:: MidiCC external controller as part of MidiHidSystem.
+RELATED:: Guides/MidiHidSystem-Guide
+CATEGORIES:: External Control>MIDI
+
+DESCRIPTION::
+Relative mode:
+We can only use relative mode if the target implements a .parameterValue method. Which we query to get the current value of the parameter. Whereby the parameter is the thing the knob is setting, which is not the same as the output:
+parameter + macroMaps = output.

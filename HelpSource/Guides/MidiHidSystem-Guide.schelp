@@ -1,0 +1,61 @@
+TITLE:: MidiHidSystem Guide
+SUMMARY:: Introduction on how to setup and use MidiHidSystem for midi (/hid) input, feedback, macro-mapping, and preset management.
+CATEGORIES:: External Control>MIDI, External Control>HID
+
+SECTION:: Introduction
+The design goal is to make an infrastructure which allows for an eloborate Midi/Hid user experience, where all desired features are accecible without writing new code. I have been inspired by the midi infrastructure of ddwMIDI, by H. James Harkins. It should accomodate the following features:
+
+LIST::
+## the ability to map a macro control, to a normal control, without writing any lines of code but by pressing a button (i.e. map an LFO which has 2 knobs for amplitude and frequency, to a knob which controls the cutoff frequency of a filter);
+## controls can be either server or language side controls; and it should make no difference to the user at the stage of interacting with the physical controls;
+## it should be easy to save the current configuration of all the physical controls as a preset;
+## it should be possible to accomodate HID in the future;
+## it should support sending midi feedback;
+## the syntax should be short and easy;
+## it should be as generic as possible;
+## it should be usable for continous controllers, buttons, endless encoders, hid, and keyboards.
+::
+
+SECTION:: Architecture Overview
+The main architecture is provided by the class MidiHidSystem. This class initializes everything required in a classmethod. To add a physical controller, one needs to instantiate an object as defined by a subclass of MidiHidSystem. For each controller type there is a different subclass of MidiHidSystem, such a subclass defines the relation between source and target. To make sure target and source are independent, the design is such that a target is always supplied with a value between 0 and 1. Any controller logic should take place on the level of the subclass of the MidiHidSystem (i.e. dealing with endless midi encoders). Specification for this should be added as 3d, 4th etc arguments. Let's look at an example. MidiCC(source,target,controller sensitivity) maps a midi cc controller, as specified by source = [MidiInOutPair instance, channel, cc] to a target. A target can be anything which replies to the .value(0..1) message. This makes sure we can use this in a very general way.
+
+The power of MidiHidSystem however lies in some more specific features. If the target also responds to outputValue, we automatically generate a midi feedback signal. Furthermore, we discern between normal and macro control, this allows for the mapping of macro's to normal controls.
+
+SECTION:: On Macro mapping
+I have dileberately chosen to make this a limited feature in the sense that not every control can be mapped to every control. In a performace context that would make no sense because you lose the overview. Therefor only designated macro controls can be mapped live. Macro controls live as synths on the server. A macro control is a synth with the following structure:
+It has an argument macroBus, and it uses the pseudoUgen macroOutput.kr(output, macroBus). 
+It is the responsibility of the user to make sure that one only designates a control as macro, when it indeed refers to a synth which has this structure. We assume that all control signal are 0 to 1 (or in the future -1 to 1). A macro is a synth which sends a 2-channel output to its own macro bus; a reference value, and a modulation value. This allows you to dictate the amount of sidechain from the macro output into your normal controller, using a designated drywet knob. Typically, in EuroRack systems this drywet or modulate knob is located on the device which is receiving the modulation signal. Here I have located it instead on the side of the modulation sending macro synth. Furthermore, the design philosophy is different. Typically, when modulating in Eurorack sense, you send a signal with some charecteristics, let's say a sine wave between 0 and; then you determine how much to add from that signal by setting the drywet amount, let's say 0.25. Now if we assume the dry signal is steady at 1. The modulated output will oscilate between 0.75 and 1. The same can be accomplished using my system. You pick your reference signal to be 0.75, and your modulation signal should be a sine between 0 and 1.  
+
+SECTION:: Targets
+I said before: a target is something which replies to .value(args). Where the arguments should match with the type of controller. Furthermore, a method .outputValue is queried to implement midi feedback. I have defined convenience classes for two different targets: ServerControl, and LangControl.
+
+SECTION:: Architecture Complications
+The language-server divide complicates this project considerably. First of all, since the macro's live on the server we need a way to keep an object in sync with a bus on the server. We do this by running a plc (call a function at a specific rate). Such that for each 
+
+Furthermore, there is an important difference in how data flows on the server and in the language. How I understand it, on the server data is 'pushed', that is data is generated and than manipulated later on; i.e. a Sawtooth is generated and then some effect is applied. This happes always. Whereas in the language data is 'pulled'. In the sense that you call a function/method, which then calls other function/methods. Data is only changed upon request. So if we want to manipulate a language side object from a macro on the server side, we need to define a paradigm on how this syncing is done. I define two paradigms: "pulling", and "plc pushing". The first creates an object, which if you call the .value method, syncs itself at that moment with the server. The second updates an object instance at a specified rate.
+
+SECTION:: Language Side: Pulling
+Use the LangControl object. You can pass it directly as a target to one of the subclasses of MidiHidSystem. Furthermore, if you call .value on LangControl you get an up to date value (which is modulated by a macro).
+
+SECTION:: Language Side: Plc Pushing
+To be implemented in Targets.sc.
+
+SECTION:: Limitations
+The current implementation makes it impossible to write to a sub variable of an object, i.e. you cannot setup a controller for on object.variable.subvariable.
+
+SECTION:: Controller Integration
+A typical macro synth looks as follows.
+code::
+SynthDef("macro_LFO",{arg macroBus;
+	var output, amplitude, reference, modulator;
+	modulator = SinOsc.kr(\freq.kr(0.1)); // the modulator should be a signal between -1 and 1; this is perhaps a bit confusing as all mappings themselves assume signal between 0 and 1, but the logic is that this signal controls a crossfade
+	modulator = LinXFade2.kr(-1,modulator,\crossfade.kr(0).linlin(0,1,-1,1));
+	reference = \ref.kr(0);
+	Out.kr(macroBus,[modulator, reference]);
+}).add;
+::
+
+Call .installMacro on your macro synth to automatically generate a control bus, which is then also connected on server side.
+
+SECTION:: Custom resetting behavior
+If you whish to call a specific action upon your synth/node, for example when macro mapping, use the resetLibrary in the MySynthDef class. Add a function to be called upon resetting using .reset on your MySynthDef instance. You can execute this function/object by calling .reset on your synth.

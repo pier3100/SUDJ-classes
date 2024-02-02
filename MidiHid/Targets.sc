@@ -1,12 +1,19 @@
 /* 
 TODO
-
+- test preset system
+- test feedback for buttons
 - toggling of que buttons does not work
 - when mapping (in test_surround_rev2, at the bottom) knob to \pan, the parameterValue yields unexpected values, while the outputValue gives expected values
 - add push encoder resetting functionality
 - add quantization support (both for button and knobs, at all time frames)
 - implement preset system
 - midifeedback for buttons (start with buttons on XoneDX)
+- advanced mappings: such as shift, and bitwigs 8 standard knobs; two approaches
+    - make multiple mappings, and activate/deactivate mappings with custom logic (this is also the traktor seems to handle it)
+    - make another class, a targetProxy; and then you can select the target based on something else; so lets say we can select a synth which we want to edit; then based on which synth we have, we also supply the corresponding target to the proxyTarget; so we will probably have a synthConsole, which contains methods to interact with it (to which we assign buttons); and contains a list of Players (where a player will be a wrapper for a synth, and includes a corresponding target object); if we change the synth we have selected, we also update the target function
+    - maybe we don't need a "targetProxy to this", I think it suffices just to reassign the target in the MidiHid instance
+        - we do get a problem though we our preset system, since this supposes correspondance between source and target
+    - maybe better therefor to do it in the Traktor style, with duplicate mappings, and make some convenience container classes for this purpose
 
 DONE
 - check naming of classes, check whether syntax is nice
@@ -22,6 +29,16 @@ x make a parent class for AbstractLangTarget and LangBoolTarget
 - implement sensitive mode for relative encoders
 - make sure reference value is automatically updated on start of macro-mapping to initial value -> only when corresponding knob is turned LANGTARGET
 - implement in project/physicalInterfaces
+- midi feedback for buttons
+- send midi feedback directly when receiving midi input (next to sending on the PLC), 
+    - maybe via dependants system
+    - rather define a targetOut maybe in MidiHidSystemTemplate
+        - if not specified by user, but target.outputValue exists, then targetOut = {target.outputValue};
+        - but the user can also manually specify a targetOut;
+        - targetOut is called by the midiOutPLC,
+        - targetOut is called to generate a midiOut message for each event for the input object; so whenever possibly we are updating something on the language or the server, due to the corresponding input, we also write a midiOut message
+    - make preset system
+        - for make one mother instanceList to which we add the entire instance, this offers more flexibility
 
 NOTE
 - a mapping to a instance variable of an object can be achieved by supplying this instance object directly.
@@ -37,7 +54,7 @@ AbstractTarget : Object {
     //for a target to participate in the macro mapping infrastructure, which is implemented in ServerControl/LangControl/MacroOutput and enabled by the MidiHidSystem
     classvar initialized = false, dummyBus;
     var <macroBus; //the bus it sends or reads from
-    var <object, <initialValue, <baseValue;
+    var <object, <initialValue, <>baseValue;
 
     *new {
         initialized.not.if({this.init});
@@ -87,6 +104,37 @@ AbstractTarget : Object {
         //to be implemented in subclass
         //this is called for midicontrollers in relative mode       
     }
+
+    resetBaseValue {
+        //you might want to change this in your subclass
+        //this is used to restore the parametervalue to the baseValue
+        this.parameterValue_(baseValue);
+    }
+
+    resetInitialValue {
+        //you might want to change this in your subclass
+        //this is used to restore the parametervalue to the baseValue
+        this.parameterValue_(initialValue);
+    }
+
+    storeBaseValue {
+        //you might want to change this in your subclass
+        //this is used to store the parametervalue to the baseValue
+        baseValue = this.parameterValue;
+    }
+
+    == { |anAbstractTarget|
+        // we say they are equal if the objects are of the same Class
+        if(anAbstractTarget.respondsTo(\object)){
+            ^(this.object.class == anAbstractTarget.object.class);
+        }{
+            ^false;
+        }
+	}
+
+	hash {
+        ^(this.class.hash << 1 bitXor: object.class.hash);
+	}
 }
 
 AbstractServerTarget : AbstractTarget {
@@ -101,6 +149,10 @@ AbstractServerTarget : AbstractTarget {
         key = key_;
 
         this.setupParameterBus;
+    }
+
+    installMacroBus { // actually assign the bus to read from, which contains the modulator
+        object.setControlBus(key, macroBus.index);
     }
 
     setupParameterBus {
@@ -120,6 +172,22 @@ AbstractServerTarget : AbstractTarget {
     parameterValue_ { |val|
         parameterBus.setSynchronous(val);
     }
+
+    == { |anAbstractServerTarget|
+        // we say they are equal of the node the synth they refer to has the same name (so here I assume object is a synth, while I also want to allow for nodes TODO)
+        if(anAbstractServerTarget.respondsTo(\object)){ 
+            if(anAbstractServerTarget.object.respondsTo(\defName)){
+                ^(this.object.defName == anAbstractServerTarget.object.defName);
+            }
+            ^false;
+        }{
+            ^false;
+        }
+	}
+
+	hash {
+        ^(this.class.hash << 1 bitXor: object.defName.hash);
+	}
 }
 
 ServerTarget : AbstractServerTarget {
@@ -147,7 +215,7 @@ ServerTarget : AbstractServerTarget {
         // if possible we set the macro values to match the current values of the node/synth
         if((MidiHidSystem.activeMacroTarget.key==\ref)||(MidiHidSystem.activeMacroTarget.key==\reference)){ MidiHidSystem.activeMacroTarget.parameterValue_(this.parameterValue) };
         if((MidiHidSystem.activeMacroTarget.key==\cross)||(MidiHidSystem.activeMacroTarget.key==\crossfade)){ MidiHidSystem.activeMacroTarget.parameterValue_(0) };
-        object.setControlBus(key,macroBus.index);
+        this.installMacroBus;
     }
 }
 
@@ -245,7 +313,7 @@ BoolLangTarget : AbstractTarget {
     init { |object_, methodKey_|
         object = object_;
         methodKey = methodKey_;
-        initialValue = object.perform(methodKey);
+        if(object.respondsTo(methodKey)){ initialValue = object.perform(methodKey) }{ initialValue = false }; // hereby we allow for object which only have a setter method
         parameterValue = initialValue;
     }
 

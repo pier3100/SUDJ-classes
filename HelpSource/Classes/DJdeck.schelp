@@ -1,0 +1,6 @@
+CLASS:: DJdeck
+SUMMARY:: A single DJdeck which control a related synth.
+CATEGORIES:: Control
+
+DESCRIPTION::
+The class takes care of handling your buffers efficiently. So if multiple decks play the same track, they make use of the same buffer. In order to keep track of which decks are using a buffer, we write add these decks as dependants to the buffer object.

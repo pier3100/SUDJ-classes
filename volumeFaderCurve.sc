@@ -6,14 +6,12 @@ VolumeFaderCurve {
 }
 
 + SimpleNumber{
-
     volumeFaderCurve{
         ^this.value*this.value.linlin(0,1,-60,0).dbamp;
     }
 }
 
 + SequenceableCollection{
-    
     volumeFaderCurve { 
         ^this.performUnaryOp('volumeFaderCurve');
     }

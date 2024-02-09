@@ -12,11 +12,12 @@ DONE
         - possibly we need a watchdog PLC which makes sure phase remains in sync
     - a button to instantanously set the deck as the master tempo (that is: sync at this moment the master to the current deck, and then slave this deck to the master)
     - master clock is a LinkClock
-- I think it makes more sense to let the beats value of the MyTempoClock be determining for the DJDeck, so that would entail that if you set the beats value to another value, the DJdeck should follow. So instead of jumpToBeat calling clock.beats, we will make the DJdeck dependent upon the beats value, so we get beats calling jumpToBeat (by dependancy and .update); this makes sense as we are syncing the clocks, and the DJ deck needs to make sure its track is in sync with its clock.
+- I think it makes more sense to let the beats value of the TrackClock be determining for the DJDeck, so that would entail that if you set the beats value to another value, the DJdeck should follow. So instead of jumpToBeat calling clock.beats, we will make the DJdeck dependent upon the beats value, so we get beats calling jumpToBeat (by dependancy and .update); this makes sense as we are syncing the clocks, and the DJ deck needs to make sure its track is in sync with its clock.
 
 */
 
-MyTempoClock : TempoClock {
+TrackClock : TempoClock {
+    // a tempo clock which allows non-positive tempi, and offers functionality for syncing clocks, can be paused, and features a bus which can be used in synths
     classvar <>barsPerPhrase = 8;
     var <backwardClock;
     var <bus;

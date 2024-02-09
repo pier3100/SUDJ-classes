@@ -28,7 +28,7 @@ DONE
     - similar as above but use a standard ramp buffer, and read it in parallel (analyze whether these buffers are always synced)
     - use sendID of VDiskIn
 - load track in sync
-- tempo/phase syncing (see MyTempoClock)
+- tempo/phase syncing (see TrackClock)
     - make clock.beats leading by means of dependency
 - .loadDouble; 
     - not working yet: it works when loading it directly as first track; it does not work if we have first loaded another track, synth.isRunning remains false, also when sending synth.run(true); no isRunning is not the problem (this was due to me not having launched a NodeWatcher)
@@ -80,7 +80,7 @@ DJdeck : Object {
 
     init { |b, target, addAction|
         bus = b;
-        clock = MyTempoClock(125/60).pause;
+        clock = TrackClock(125/60).pause;
         clock.addDependant(this);
         referenceBus = Bus.control(numChannels: 2);
         positionSetBus = Bus.control;

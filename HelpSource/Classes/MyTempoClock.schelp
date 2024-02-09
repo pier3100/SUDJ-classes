@@ -1,4 +1,4 @@
-CLASS:: MyTempoClock
+CLASS:: TrackClock
 SUMMARY:: TempoClock with aditional features.
 CATEGORIES:: Scheduling>Clocks
 
@@ -6,7 +6,7 @@ DESCRIPTION::
 This TempoClock also has a bus, such that it can be used on server side aswell. 
 
 code::
-t = MyTempoClock(125);
+t = TrackClock(125/60);
 
 (
 SynthDef(\test, { |tempoclock|
@@ -20,4 +20,4 @@ y = Synth(\test, [\tempoclock, t.bus]); \\hand over the bus object/index
 
 The bus is updated synchronouly when you change the tempo.
 
-Furthermore, this clock includes a second clock, which it uses to keep track of backward time. This allows MyTempoClock to use non-positive tempo's.
+Furthermore, this clock includes a second clock, which it uses to keep track of backward time. This allows TrackClock to use non-positive tempo's.

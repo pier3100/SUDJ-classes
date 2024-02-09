@@ -1,5 +1,4 @@
 + Date {
-
 	*fromSMPTEcopy { |smpte, daylightSavings = 1|
 		var theDay, dayN, monthLib, lastMonth = 1, thisMonth;
 		var year, month, day, hour, minute, second, dayOfWeek, rawSeconds, bootSeconds;
@@ -40,4 +39,4 @@
 	
 	asSMPTE { |fps| ^SMPTE( rawSeconds, fps ); }
 		
-	}
+}

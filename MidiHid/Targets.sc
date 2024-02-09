@@ -39,8 +39,8 @@ x make a parent class for AbstractLangTarget and LangBoolTarget
         - but the user can also manually specify a targetOut;
         - targetOut is called by the midiOutPLC,
         - targetOut is called to generate a midiOut message for each event for the input object; so whenever possibly we are updating something on the language or the server, due to the corresponding input, we also write a midiOut message
-    - make preset system
-        - for make one mother instanceList to which we add the entire instance, this offers more flexibility
+- make preset system
+    - for make one mother instanceList to which we add the entire instance, this offers more flexibility
 
 NOTE
 - a mapping to a instance variable of an object can be achieved by supplying this instance object directly.
@@ -280,8 +280,6 @@ ContinuousLangTarget : AbstractTarget {
         if(macroBus.index!=MidiHidSystem.dummyBus.index){ //only install the new mapping if it not the the trivial place holder mapping
             MidiHidSystem.plcMacroMapping.add({ this.pushMacroMap });
         };
-
-        
     }
 
     pushMacroMap {

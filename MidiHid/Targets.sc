@@ -1,6 +1,8 @@
 /* 
 TODO
+- no feedback needed when in absolute mode
 - test preset system
+    -> IMPORTANT: I realized that the preset has nothing to do with the controller/mapping; I should be completely independent; I has to do with the parameters of the synths and other devices (I realized that in Bitwig it stores the parameters of your synths irespective of your controller)
 - test feedback for buttons
 - toggling of que buttons does not work
 - when mapping (in test_surround_rev2, at the bottom) knob to \pan, the parameterValue yields unexpected values, while the outputValue gives expected values

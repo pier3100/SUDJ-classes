@@ -100,10 +100,10 @@ MidiHidSystem : Object {
 }
 
 MidiHidSystemTemplate : MidiHidSystem {
-    var source; //defines what is the input we are mapping
-    var target; // called upon input
-    var targetOut; // called for feedback to controller
-    var active = true; // this allows to temporarily disable a midimapping based on some logic
+    var <source; //defines what is the input we are mapping
+    var <target; // called upon input
+    var <targetOut; // called for feedback to controller
+    var <>active = true; // this allows to temporarily disable a midimapping based on some logic
 
     *init {
         //to be implemented in subclass
@@ -201,13 +201,13 @@ MidiSystem : MidiHidSystemTemplate {
 
 MidiCC : MidiSystem {
     classvar <initializedMidiCC = false;
-    var <target, <mode, <sensitivity, <acceleration, constrained, time;
+    var <mode, <sensitivity, <acceleration, constrained, time;
 
     *new { |source, target, mode = \relative, sensitivity = 1, acceleration = 0, constrained = true, active = true, targetOut|
         initializedMidiCC.not.if({ this.init });
         if(([\absolute, \relative, \forwardBackwardButton].includes(mode)).not){ Error("% is not a valid mode.".format(mode)).throw }; // throw an error when the mode is not valid
         if(mode == \relative && target.respondsTo(\parameterValue).not){ Error("For the supplied target the method parameterValue has no implementation, hence we cannot handle relative mode").throw }; // if currentParameterValue is not implemented there is no way to handle a relative controller
-        ^super.new.init(source, target, mode, sensitivity, constrained, active, targetOut).add;
+        ^super.new.init(source, target, mode, sensitivity, acceleration, constrained, active, targetOut);
     }
 
     *init {        
@@ -224,7 +224,7 @@ MidiCC : MidiSystem {
     }
 
     init { |source_, target_, mode_, sensitivity_, acceleration_, constrained_, active_, targetOut_|
-        source = source_.assource;
+        source = source_.asMidiSource;
         target = target_;
         mode = mode_;
         sensitivity = sensitivity_; //so an input value of 1, is normal sensitivity
@@ -232,7 +232,8 @@ MidiCC : MidiSystem {
         constrained = constrained_;
         time = Time.new;
         active = active_;
-        source.midiDevice.midiOut !? { if(targetOut_.isNil){ if(target.respondsTo(\outputValue)){ targetOut = { target.outputValue }} }{ targetOut = targetOut_ } }// assign targetOut only if we are able to send it// standard assign targetOut_, if Nil, assign target.outputValue if available
+        source.midiDevice.midiOut !? { if(targetOut_.isNil){ if(target.respondsTo(\outputValue)){ targetOut = { target.outputValue }} }{ targetOut = targetOut_ } };// assign targetOut only if we are able to send it// standard assign targetOut_, if Nil, assign target.outputValue if available
+        this.add;
     }
 
     add {
@@ -328,7 +329,7 @@ MidiButton : MidiSystem {
     }
 
     init { |source_, targetOn_, targetOff_, mode_, delay_, active_, targetOut_|
-        source = source_.assource;
+        source = source_.asMidiSource;
         targetOn = targetOn_;
         mode = mode_;
         if(mode == \push){ targetOff = targetOn }{

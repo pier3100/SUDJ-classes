@@ -1,5 +1,0 @@
-+ PathName {
-    asPathName {
-        ^this;
-    }
-}

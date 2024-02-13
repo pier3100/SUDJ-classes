@@ -103,7 +103,7 @@ MidiHidSystemTemplate : MidiHidSystem {
     var <source; //defines what is the input we are mapping
     var <target; // called upon input
     var <targetOut; // called for feedback to controller
-    var <>active = true; // this allows to temporarily disable a midimapping based on some logic
+    var <>active = true; // this allows to temporarily disable a midimapping based on some logic, should be a boolean or a function which return a boolean
 
     *init {
         //to be implemented in subclass
@@ -243,7 +243,7 @@ MidiCC : MidiSystem {
 
     onInput { |val|
         // this will be called upon an incoming message 
-        if(active){ // only execute if active
+        if(active.value){ // only execute if active
             target.value(this.messageMapping(val));
             targetOut !? { this.feedback }; // we directly give feedback
         }
@@ -279,7 +279,7 @@ MidiCC : MidiSystem {
     feedback {
         var message;
         message = this.prepareFeedbackMessage;
-        if(active){ source.midiDevice.midiOut.control(*message) }; // only send the feedback when the mapping is active
+        if(active.value){ source.midiDevice.midiOut.control(*message) }; // only send the feedback when the mapping is active
     }
 
     prepareFeedbackMessage {
@@ -351,7 +351,7 @@ MidiButton : MidiSystem {
     }
 
     noteOnAction { |val|
-        if(active){
+        if(active.value){
             if(delay > 0){ // to implement that a certain amount of time needs to be pushed before the action takes place, we schedule the task and cancel it if we release it earlier
                 dynamicTask.sched(delay); // sched the normal behavior (we have determined that dynamicTask = normal behavior earlier)
             }{ 
@@ -362,7 +362,7 @@ MidiButton : MidiSystem {
 
     noteOnBasicAction {
         targetOn.value(this.messageMapping(1)); // normal behavior; we hardcode that noteOn means value == 1
-        this.feedback;
+        targetOut !? { this.feedback };
     }
 
     noteOffAction {
@@ -382,7 +382,7 @@ MidiButton : MidiSystem {
     feedback {
         var message, value;
         value = targetOut.value;
-        if(active){// only send the feedback when the mapping is active
+        if(active.value){// only send the feedback when the mapping is active
             if(value == 1){ 
                 message = [source.midiChannel, source.midiCC, 127];
                 source.midiDevice.midiOut.noteOn(*message);
@@ -421,10 +421,10 @@ MidiInOutPair : Object {
 		indexIn = indexIn_;
 		indexOut = indexOut_;
         nameInput = MIDIClient.sources[indexIn].name;
-		indexOut !? ({
+		indexOut !? {
             nameOutput = MIDIClient.destinations[indexOut].name;
             midiOut = MIDIOut(indexOut);
-        });
+        };
 	}
 
 	isMidiInOutPair { 

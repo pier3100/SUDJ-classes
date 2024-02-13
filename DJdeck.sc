@@ -63,7 +63,7 @@ NOT NEEDED
 
 DJdeck : Object {
     var <bus, <clock, <buffer, <synth, <referenceBus, <track;
-    var trackTempo = 1, quePoint = 0, schedJump = false, <loop = false, beatJumpBeats = 4, needledroppingRelativePosition = 0;
+    var trackTempo = 1, quePoint = 0, schedJump = false, <loop = false, beatJumpBeats = 4;
     var <trackBufferReady = false;
     var testBus, testBuffer;
     var userInducedGridOffsetTotal = 0, <userInducedGridOffsetStatic = 0;
@@ -80,7 +80,7 @@ DJdeck : Object {
 
     init { |b, target, addAction|
         bus = b;
-        clock = TrackClock(125/60).pause;
+        clock = TrackClock.new(125/60).pause;
         clock.addDependant(this);
         referenceBus = Bus.control(numChannels: 2);
         positionSetBus = Bus.control;
@@ -88,6 +88,7 @@ DJdeck : Object {
         pauseBus = Bus.control;
         buffer = Buffer.loadCollection(Server.default,[0, 0, 0, 0], 2, action: {this.spawnSynths(target, addAction)} ); // use .loadCollection instead of .alloc because it allows to supply an action function; after the buffer is setup, we create the synth
         // ideally I would free the buffer here, but then the buffer will be free before the synth is created
+        track = TrackDescription.newDummy(125, 6); // placeholder
     }
 
     // frontend: tracks
@@ -205,13 +206,12 @@ DJdeck : Object {
 
     needledropping_ { |relativePosition|
         var jumpToBeat;
-        needledroppingRelativePosition = relativePosition;
-        jumpToBeat = (track.duration * relativePosition * clock.tempo).round;
-        clock.beats(jumpToBeat);
+        jumpToBeat = (track.duration * relativePosition * trackTempo).round;
+        clock.beats_(jumpToBeat);
     }
 
     needledropping {
-        ^needledroppingRelativePosition;
+        ^(clock.beats / (track.duration * trackTempo));
     }
 
     beatJump { |beats, quant|

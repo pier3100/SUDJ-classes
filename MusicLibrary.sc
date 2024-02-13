@@ -6,6 +6,7 @@ DONE
 - Lookup tracks based on TraktorID instead of path, because path might change
 - speedup updating from traktor by looking at Traktor modified date
 - test updating from Traktor
+- use a collection instead of an array, because we can then use the traktor id for fast lookup; or perhaps better make a seperate lookup table, which just contains all ids and array index; we cannot modify an existing method from array or its super classes, because these classes do not assume unique methods, so do not implement a hash functions, so it won't be fast
  */
 
 MusicLibrary {
@@ -26,11 +27,13 @@ MusicLibrary {
                 instance.updateTracksFromTraktor(collectionText, Date.rawSeconds(File.mtime(libraryPath)).asSortableString);
                 Library.put(\musicLibrary,instance); // should happen before loading the playlists, because the Playlist.new method lookup the tracks in the musicLibrary
                 instance.loadPlaylistsFromTraktor(collectionText); // overwrite all playlists
+            }{
+                Library.put(\musicLibrary,instance); // should happen before loading the playlists, because the Playlist.new method lookup the tracks in the musicLibrary
             }
         }{
             instance = this.newFromTraktor(traktorLibraryPath);
-            Library.put(\musicLibrary,instance); // should happen before loading the playlists, because the Playlist.new method lookup the tracks in the musicLibrary
-        }
+        };
+        currentEnvironment.postln;
         ^instance;
     }
 
@@ -228,8 +231,17 @@ TrackDescription : SoundFile {
     //make a child from SoundFile
     var <title, <artist, <key, <bpm, <gridOffset, <>userInducedGridOffset = 0, <id;
 
+    *newDummy { |bpm, keyNumber|
+        ^super.openRead(Platform.resourceDir +/+ "sounds/a11wlk01.wav").init(bpm, keyNumber);
+    }
+
     *newFromTraktor { |string|
         ^super.new.fromTraktor(string);
+    }
+
+    init { |bpm_, keyNumber_|
+        bpm = bpm_;
+        key = Key.newFromTraktor(keyNumber_);
     }
 
     fromTraktor { |string|
@@ -320,6 +332,12 @@ Substring {
         ^this.replace("/:","\\");
     }
 } 
+
++ Nil {
+    string {
+        ^this;
+    }
+}
 
 + Array {
     removeNil {

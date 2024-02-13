@@ -1,5 +1,9 @@
+/* TODO
+- make it possible to choose the referenceTrack
+- make it possible to to have no filter */
+
 LibraryConsole {
-    var <>activeTrackArray, activeTrackArrayFiltered, <>prelistenDeck, <>referenceTrack, <>count = -1;
+    var <>activeTrackArray, <activeTrackArrayFiltered, <>prelistenDeck, <>referenceTrack, <>count = -1;
 
     *new { |prelistenDeck|
         ^super.new.init(prelistenDeck);
@@ -7,6 +11,7 @@ LibraryConsole {
 
     init { |prelistenDeck_|
         prelistenDeck = prelistenDeck_;
+        referenceTrack = TrackDescription.newDummy(125, 6);
     }
 
     filter { |tolerance|
@@ -20,7 +25,7 @@ LibraryConsole {
                 toleranceRounded = 4;
             }
         }
-        ^activeTrackArrayFiltered = activeTrackArray.filterBPM(referenceTrack.bpm - (tolerance * 4),referenceTrack.bpm + (tolerance * 4),toleranceRounded).filterKey(referenceTrack.key,referenceTrack.bpm,tolerance).randomize;
+        ^activeTrackArrayFiltered = activeTrackArray.filterBPM(referenceTrack.bpm - (tolerance * 4),referenceTrack.bpm + (tolerance * 4), toleranceRounded).filterKey(referenceTrack.key, referenceTrack.bpm, tolerance).randomize;
     }
 
     setReferenceTrack {
@@ -31,6 +36,6 @@ LibraryConsole {
         var increment;
         if(direction){ increment = 1 }{ increment = -1};
         count = count + increment;
-        ^prelistenDeck.loadAndPlayTrack(activeTrackArrayFiltered[count]);
+        ^prelistenDeck.loadTrack(activeTrackArrayFiltered[count]);
     }
 }

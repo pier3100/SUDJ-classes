@@ -24,7 +24,7 @@ PLC {
     }
 
     cmdPeriod {
-        //clock.play(routine,quant:1); // make sure to reschedule the routine when the cmdPeriod is being pressed (which aborts the scheduled tasks)
+        clock.play(routine,quant:1); // make sure to reschedule the routine when the cmdPeriod is being pressed (which aborts the scheduled tasks)
     }
 
     tempo_ { |value|

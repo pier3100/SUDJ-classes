@@ -13,7 +13,7 @@ PLC {
         routine = Routine{
             inf.do{ |i|
                 clock.timeToNextBeat.wait; //wait till next cyle start
-                funcList.value;      //run all functions
+                funcList.value;     //run all functions
                 0.1.wait;       //should be lower then cycle length, is required in order to make sure not two cycles are computed directly after each other
             };
         };
@@ -24,7 +24,7 @@ PLC {
     }
 
     cmdPeriod {
-        clock.play(routine,quant:1); // make sure to reschedule the routine when the cmdPeriod is being pressed (which aborts the scheduled tasks)
+        //clock.play(routine,quant:1); // make sure to reschedule the routine when the cmdPeriod is being pressed (which aborts the scheduled tasks)
     }
 
     tempo_ { |value|

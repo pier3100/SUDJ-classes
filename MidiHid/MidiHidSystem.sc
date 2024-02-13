@@ -295,12 +295,12 @@ MidiButton : MidiSystem {
     // direct calls targetOn with value 1, and targetOff with value 0
 
     classvar <initializedMidiButton = false;
-    var <source, <targetOn, <targetOff, mode, dynamicTask, delay, delayedEventOccured = false;
+    var <targetOn, <targetOff, mode, dynamicTask, delay, delayedEventOccured = false;
 
-    *new { |source, targetOn, targetOff, mode = \push, delay = 0.0, active, targetOut|
+    *new { |source, targetOn, targetOff, mode = \push, delay = 0.0, active = true, targetOut|
         if(([\push, \toggle, \direct].includes(mode)).not){ Error("% is not a valid mode.".format(mode)).throw }; // throw an error when the mode is not valid
         initializedMidiButton.not.if({ this.init });
-        ^super.new.init(source, targetOn, targetOff, mode).add;
+        ^super.new.init(source, targetOn, targetOff, mode, delay, active, targetOut).add;
     }
 
     *init {
@@ -331,6 +331,7 @@ MidiButton : MidiSystem {
     init { |source_, targetOn_, targetOff_, mode_, delay_, active_, targetOut_|
         source = source_.asMidiSource;
         targetOn = targetOn_;
+        target = targetOn; // for compability
         mode = mode_;
         if(mode == \push){ targetOff = targetOn }{
             targetOff = targetOff_; //normally 
@@ -338,7 +339,7 @@ MidiButton : MidiSystem {
         delay = delay_;
         if(delay > 0){dynamicTask = DynamicTask.new(SystemClock, { this.noteOnBasicAction; delayedEventOccured = true })}; // in case we need to let event only occur if pressed more than delay time, we schedule it; and if needed cancel it
         active = active_;
-        source.midiDevice.midiOut !? { if(targetOut_.isNil){ if(targetOn.respondsTo(\outputValue)){ targetOut = { target.outputValue }} }{ targetOut = targetOut_ } }// assign targetOut only if we are able to send it// standard assign targetOut_, if Nil, assign target.outputValue if available
+        source.midiDevice.midiOut !? { if(targetOut_.isNil){ if(targetOn.respondsTo(\outputValue)){ targetOut = { targetOn.outputValue }} }{ targetOut = targetOut_ } }// assign targetOut only if we are able to send it// standard assign targetOut_, if Nil, assign target.outputValue if available
     }
 
     messageMapping { |val|
@@ -405,8 +406,7 @@ MidiInOutPair : Object {
 		var tempIndexIn, tempIndexOut;
         MIDIClient.initialized.not.if({MIDIClient.init()});
         tempIndexIn = MIDIClient.sources.detectIndex { |endpoint| endpoint.name.contains(nameIn)};
-        
-        nameOut!?({
+        nameOut !?({
             tempIndexOut = MIDIClient.destinations.detectIndex { |endpoint| endpoint.name.contains(nameOut)}
         });
 		^super.new.init(tempIndexIn,tempIndexOut);
@@ -421,9 +421,9 @@ MidiInOutPair : Object {
 		indexIn = indexIn_;
 		indexOut = indexOut_;
         nameInput = MIDIClient.sources[indexIn].name;
-        nameOutput = MIDIClient.destinations[indexOut].name;
-		indexOut!?({
-            midiOut = MIDIOut(indexOut)
+		indexOut !? ({
+            nameOutput = MIDIClient.destinations[indexOut].name;
+            midiOut = MIDIOut(indexOut);
         });
 	}
 
@@ -503,7 +503,7 @@ Time {
 
 + Array {
     asMidiSource {
-        ^MidiSource.new(this[0], this[1], this[2]);
+        ^MidiSource.new(this[2], this[1], this[0]);
     }
 }
 

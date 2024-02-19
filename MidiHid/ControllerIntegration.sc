@@ -1,5 +1,5 @@
 ServerControlLag : Object {
-    classvar initialized = false, <dummyBus, <>smoothingTime = 0.2;
+    classvar initialized = false, <dummyBus, <>smoothingTime = 0.05;
 
     *kr {arg key, initialValue = 0;
         // design is different as compared to modulation system in euro rack system, in some sense it is swapped, the modulator is connected to the dry/wet knob of a crossfade, and the reference value is fed into the crossfade

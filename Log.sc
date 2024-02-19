@@ -12,7 +12,7 @@ Log {
     }
 
     write { |string|
-        file.write(Date.getDate.stamp++" \t"++string++"\n");
+        file.write(string);
     }
 
     close {
@@ -22,8 +22,10 @@ Log {
 
 + String {
     log { |object|
-        var log;
+        var log, logString;
+        logString = Date.getDate.stamp++" \t"++object.class.asString++": "++this++"\n";
+        logString.postf;
         log = Library.at(\log);
-        log !? { if(object.isNil){ log.write(this) }{ log.write(object.class.asString++": "++this)} };
+        log !? { log.write(logString) };
     }
 }

@@ -311,7 +311,7 @@ MidiCC : MidiSystem {
     }
 
     prepareFeedbackMessage {
-        ^[source.midiChannel, source.midiCC, 10]; //[source.midiChannel, source.midiCC, targetOut.value.linlin(0,1,0,127.99).floor];
+        ^[source.midiChannel, source.midiCC, source.midiChannel, source.midiCC, targetOut.value.asFloat.linlin(0,1,0,127.99).floor]; // we use asFloat to account for targetOut returning a boolean
     }
 
 }
@@ -323,7 +323,7 @@ MidiButton : MidiSystem {
     // direct calls targetOn with value 1, and targetOff with value 0
 
     classvar <initializedMidiButton = false;
-    var <targetOn, <targetOff, mode, dynamicTask, delay, delayedEventOccured = false;
+    var <targetOn, <targetOff, <mode, dynamicTask, delay, delayedEventOccured = false;
 
     *new { |source, targetOn, targetOff, mode = \push, delay = 0.0, active = true, targetOut|
         if(([\push, \toggle, \direct].includes(mode)).not){ Error("% is not a valid mode.".format(mode)).throw }; // throw an error when the mode is not valid

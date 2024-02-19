@@ -6,6 +6,8 @@ TODO
     - interface functionality
     - beat sync accuracy
 - build synthdef which has DJ filter, using deadduck VST
+- tracks should not loop
+- review sound quality
     
 NICE TO HAVE
 - get rid of popping when beatjumping
@@ -63,23 +65,25 @@ NOT NEEDED
 */
 
 DJdeck : Object {
+    var deckNr;
     var <bus, <clock, <buffer, <synth, <referenceBus, <track;
-    var trackTempo = 1, <quePoint = 0, schedJump = false, <loop = false, beatJumpBeats = 4;
+    var trackTempo = 1, <quePoint = 0, <schedJump = false, <loop = false, beatJumpBeats = 4;
     var <trackBufferReady = false;
     var testBus, testBuffer;
     var userInducedGridOffsetTotal = 0, <userInducedGridOffsetStatic = 0;
     var <positionSetBus, <jumpToPositionBus, <pauseBus;
 
     // basic
-    *new { |bus, target, addAction = 'addToHead'|
-        ^super.new.init(bus, target, addAction);
+    *new { |bus, target, addAction = 'addToHead', deckNr|
+        ^super.new.init(bus, target, addAction, deckNr);
     }
 
     *initClass {
         this.addSynthDef;
     } 
 
-    init { |b, target, addAction|
+    init { |b, target, addAction, deckNr_|
+        deckNr = deckNr_;
         bus = b;
         clock = TrackClock.new(125/60).pause;
         clock.addDependant(this);
@@ -103,6 +107,7 @@ DJdeck : Object {
             // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
             buffer = track.loadBuffer(action: { trackBufferReady = true; this.reactivateSynth; action.value });
             synth.set(\trackTempo, trackTempo); 
+            (deckNr.asString++", loadTrack: \t"++track.artist++", "++track.title).log(this);
         }{
             "track is still playing".postln;
         }
@@ -127,6 +132,7 @@ DJdeck : Object {
             trackBufferReady = true;
             this.reactivateSynth;
             synth.set(\trackTempo, trackTempo); 
+            (deckNr.asString++", loadDouble: \t"++track.artist++", "++track.title).log(this);
         }{
             "track is still playing".postln;
         }
@@ -155,7 +161,7 @@ DJdeck : Object {
     }
 
     tempo_ { |newTempo|
-        clock.tempoInterface(newTempo);
+        clock.tempoInterface_(newTempo);
     }
 
     tempo {
@@ -220,19 +226,29 @@ DJdeck : Object {
         var func, q, jumpAtBeat, goTo;
         q = quant ? beats.abs; 
         jumpAtBeat = q*(clock.beats/q).ceil;
-        beatJumpBeats = beats.asInteger; // to be used if we will engage looping
-        this.scheduleJump(beats,jumpAtBeat);
+        beatJumpBeats = beats.asInteger; // will be looked up at moment of jump by schedule jump (can be changed in the meantime)
+        this.scheduleJump(jumpAtBeat);
     }
 
     loop_ { |bool|
-        loop = bool;
-        this.beatJump(beatJumpBeats); // if we are not allready beatjumping, we active the beatJumping; in scheduleJump we check whether we have not yet allready scheduled something
+        if(bool){
+            if(schedJump){
+                loop = true;
+                this.beatJump(beatJumpBeats); // if we are not allready beatjumping, we active the beatJumping; in scheduleJump we check whether we have not yet allready scheduled something
+            }
+        }{
+            loop = false;
+        }
     }
 
     loopSize_ { |direction| 
         // direction should be a bool true = increase loopSize, false = decrease loopSize
-        if(direction){ beatJumpBeats = (beatJumpBeats * 2).roundFractional}{ if(beatJumpBeats > (1/32)){ beatJumpBeats = (beatJumpBeats / 2).roundFractional} };
-        if(direction && beatJumpBeats == 1){ clock.phaseSync }; // if we come from a loop smaller than a beat, we make sure we phasesync to the master again, now our beats line up nicely (:
+        if(direction){ beatJumpBeats = (beatJumpBeats * 2).roundFractional(128).asFloat}{ if(beatJumpBeats.abs > (1/32)){ beatJumpBeats = (beatJumpBeats / 2).roundFractional(128).asFloat} };
+        if(direction && beatJumpBeats == 1.0){ clock.phaseSync }; // if we come from a loop smaller than a beat, we make sure we phasesync to the master again, now our beats line up nicely (:
+    }
+
+    loopSize {
+        ^beatJumpBeats;
     }
 
     // backend: controls
@@ -308,12 +324,12 @@ DJdeck : Object {
         ^(trackBufferReady);
     }
 
-    scheduleJump { |beats, jumpAtBeat|
+    scheduleJump { |jumpAtBeat|
         if(schedJump.not){
             clock.schedAbs(jumpAtBeat,{
-                clock.beats_((clock.beats+beats)); // we modify the clock's beats, the track follows via the .update callback
+                clock.beats_((clock.beats+beatJumpBeats)); // we modify the clock's beats, the track follows via the .update callback
                 schedJump = false;
-                if(loop){ SystemClock.sched(0.1,{ this.scheduleJump(beatJumpBeats,jumpAtBeat) }) }; // we need to schedule this a bit later in order to deal with the fact that logical time remains constant during a scheduled task;
+                if(loop){ SystemClock.sched(0.1,{ this.scheduleJump(jumpAtBeat) }) }; // we need to schedule this a bit later in order to deal with the fact that logical time remains constant during a scheduled task;
             });
             schedJump = true;
         };
@@ -355,7 +371,7 @@ DJdeck : Object {
                 // this links a jump in beats on the clock to a jump in the playing track/buffer
                 // we can't use the clock.beats value here, since this value remains unchanged during a scheduled function call, since this freezes the logical time
                 this.jumpToBeat(theChangerValue);
-                theChangerValue.postln;
+                //theChangerValue.postln;
                 // theChanged.beats.postln;
             }
         }

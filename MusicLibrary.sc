@@ -30,7 +30,7 @@ MusicLibrary {
                 instance.loadPlaylistsFromTraktor(collectionText); // overwrite all playlists
             }{
                 Library.put(\musicLibrary,instance); // should happen before loading the playlists, because the Playlist.new method lookup the tracks in the musicLibrary
-                "Reusing existing music library, no need to update".log;
+                "Reusing existing music library, no need to update".log(this);
             }
         }{
             instance = this.newFromTraktor(traktorLibraryPath);

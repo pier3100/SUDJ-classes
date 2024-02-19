@@ -93,9 +93,11 @@ TrackClock : TempoClock {
 
     pause {
         // to be paused means to have a tempo of 0
-        paused = true;
-        fallbackTempo = tempo.value; // this will be tempo we go back to once resuming playing
-        this.tempo_(0);
+        if(paused.not){
+            paused = true;
+            fallbackTempo = tempo.value; // this will be tempo we go back to once resuming playing
+            this.tempo_(0);
+        }
         ^this;
     }
 

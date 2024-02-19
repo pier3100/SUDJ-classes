@@ -1,6 +1,5 @@
 /* 
 TODO
-- I put a placeholder in prepareMessage of MidiCC, because targetOut produced errors
 - no feedback needed when in absolute mode
 - test preset system
     -> IMPORTANT: I realized that the preset has nothing to do with the controller/mapping; I should be completely independent; I has to do with the parameters of the synths and other devices (I realized that in Bitwig it stores the parameters of your synths irespective of your controller)
@@ -9,8 +8,6 @@ TODO
 - when mapping (in test_surround_rev2, at the bottom) knob to \pan, the parameterValue yields unexpected values, while the outputValue gives expected values
 - add push encoder resetting functionality
 - add quantization support (both for button and knobs, at all time frames)
-- implement preset system
-- midifeedback for buttons (start with buttons on XoneDX)
 - advanced mappings: such as shift, and bitwigs 8 standard knobs; two approaches
     - make multiple mappings, and activate/deactivate mappings with custom logic (this is also the traktor seems to handle it)
     - make another class, a targetProxy; and then you can select the target based on something else; so lets say we can select a synth which we want to edit; then based on which synth we have, we also supply the corresponding target to the proxyTarget; so we will probably have a synthConsole, which contains methods to interact with it (to which we assign buttons); and contains a list of Players (where a player will be a wrapper for a synth, and includes a corresponding target object); if we change the synth we have selected, we also update the target function
@@ -20,6 +17,7 @@ TODO
 - architecture is not proper
     - if we modify a language side parameter from the object, the button/knob is not updated, since we have associated the knob with a parameter value and the object with the output value (in order to allow for macro mapping)
     -> see implemnted makeConsistent method for ContinousLangTarget, apply for boolLangTarget aswell
+    -> does makeConsistent account for all situation, or do we rather need dependency implemented; makeConsistent only works in combination with PLC, but it does not work immediately
 - make sure when removing a mapping, we also remove the macromapping from the PLC if required
 - unify range and clip ideas over all Targets, remove constrained feature from MidiHidSystem
 
@@ -29,7 +27,12 @@ NICE TO HAVE
 - make an Interface to easily see a list of all mappings and remove one, perhaps use .compileString for a first version
 - merge boolLangTarget and ContinousLangTarget, and think about macroMapping for bools
 
+OBSOLETE
+- implement preset system
+
 DONE
+- midifeedback for buttons (start with buttons on XoneDX)
+- I put a placeholder in prepareMessage of MidiCC, because targetOut produced errors
 - check naming of classes, check whether syntax is nice
 - make sure reference value is automatically updated on start of macro-mapping to initial value -> only when corresponding knob is turned
 - test buttons for server side variables
@@ -343,7 +346,7 @@ ContinuousLangTarget : AbstractTarget {
 } 
 
 BoolLangTarget : AbstractTarget {
-    var parameterValue, >outputValue;
+    var parameterValue, >outputValue = 0;
 
     *new { |object, methodKey|
         ^super.new.init(object,methodKey);

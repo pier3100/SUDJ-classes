@@ -1,5 +1,6 @@
 /* 
 TODO
+- I put a placeholder in prepareMessage of MidiCC, because targetOut produced errors
 - no feedback needed when in absolute mode
 - test preset system
     -> IMPORTANT: I realized that the preset has nothing to do with the controller/mapping; I should be completely independent; I has to do with the parameters of the synths and other devices (I realized that in Bitwig it stores the parameters of your synths irespective of your controller)
@@ -16,6 +17,17 @@ TODO
     - maybe we don't need a "targetProxy to this", I think it suffices just to reassign the target in the MidiHid instance
         - we do get a problem though we our preset system, since this supposes correspondance between source and target
     - maybe better therefor to do it in the Traktor style, with duplicate mappings, and make some convenience container classes for this purpose
+- architecture is not proper
+    - if we modify a language side parameter from the object, the button/knob is not updated, since we have associated the knob with a parameter value and the object with the output value (in order to allow for macro mapping)
+    -> see implemnted makeConsistent method for ContinousLangTarget, apply for boolLangTarget aswell
+- make sure when removing a mapping, we also remove the macromapping from the PLC if required
+- unify range and clip ideas over all Targets, remove constrained feature from MidiHidSystem
+
+NICE TO HAVE
+- plc midi feedback only needed when macro mapped
+- test one-to-many simultanious macro mapping
+- make an Interface to easily see a list of all mappings and remove one, perhaps use .compileString for a first version
+- merge boolLangTarget and ContinousLangTarget, and think about macroMapping for bools
 
 DONE
 - check naming of classes, check whether syntax is nice
@@ -56,7 +68,7 @@ AbstractTarget : Object {
     //for a target to participate in the macro mapping infrastructure, which is implemented in ServerControl/LangControl/MacroOutput and enabled by the MidiHidSystem
     classvar initialized = false, dummyBus;
     var <macroBus; //the bus it sends or reads from
-    var <object, <initialValue, <>baseValue;
+    var <object, <key, <initialValue, <>baseValue;
 
     *new {
         initialized.not.if({this.init});
@@ -137,10 +149,14 @@ AbstractTarget : Object {
 	hash {
         ^(this.class.hash << 1 bitXor: object.class.hash);
 	}
+
+    asCompileString {
+        ^object.class.asString++", "++key;
+    }
 }
 
 AbstractServerTarget : AbstractTarget {
-    var <key, <parameterBus, <constrained; //sensitivity is used in relative mode
+    var <parameterBus, <constrained; //sensitivity is used in relative mode
 
     *new { |object, key|
         ^super.new.prInit(object, key);
@@ -247,18 +263,20 @@ ContinuousLangTarget : AbstractTarget {
     // ++ should be tested, and perhaps splitted in LangTarget (for object with some instance variable) and NumTarget (for numbers)
     // the data is pushed by a plc which is run in MidiHidSystem
     // this class should be used if you want to push to an object or number; if a macro is active, a plc is run to push the server data at a specified rate to the language
+    // the output value is the value which is avaliable in the object and used by other calls to the object, the parameter value is the value of the knob
     classvar <>pushFreq;
-    var <methodKey, <parameterValue, <outputValue, sideChainCrossfade, sideChainInput, range;
+    var parameterValue, outputValue, sideChainCrossfade, sideChainInput, range, clip;
 
-    *new { |object, methodKey, range|
-        ^super.new.init(object,methodKey, range);
+    *new { |object, methodKey, range, clip = true|
+        ^super.new.init(object,methodKey, range, clip);
     }
 
-    init { |object_, methodKey_, range_|
+    init { |object_, methodKey_, range_, clip_|
         object = object_;
-        methodKey = methodKey_;
+        key = methodKey_;
         range = range_??[0,1];
-        initialValue = object.perform(methodKey);
+        clip = clip_;
+        if(object.respondsTo(key)){ initialValue = object.perform(key) }{ initialValue = 0 }; // hereby we allow for object which only have a setter method
         parameterValue = initialValue;
         this.setMacroBus(dummyBus.index);
         this.updateOutputValue;
@@ -293,7 +311,7 @@ ContinuousLangTarget : AbstractTarget {
     }
 
     writeOutputValue {
-        object.perform(methodKey.asSetter,outputValue.linlin(0,1,range[0],range[1])); // we allow mapping to an alternative range, we do it here such that we can keep the idea intact of having values between 0,1 in our code
+        object.perform(key.asSetter,outputValue.linlin(0, 1, range[0], range[1], clip: if(clip){\minmax}{nil})); // we allow mapping to an alternative range, we do it here such that we can keep the idea intact of having values between 0,1 in our code
     }
 
     parameterValue_ { |val|
@@ -301,10 +319,31 @@ ContinuousLangTarget : AbstractTarget {
         this.updateOutputValue;
         this.writeOutputValue;
     }
+
+    parameterValue {
+        if(object.respondsTo(key)){ this.makeConsistent };
+        ^parameterValue;
+    }
+
+    outputValue {
+        if(object.respondsTo(key)){ this.makeConsistent };
+        ^outputValue;
+    }
+
+    makeConsistent {
+        // we check whether the output value on the object side has changed since the last time we wrote it from here; this means another method has modified the variable and we need to update
+        var objectValue;
+        objectValue = object.perform(key);
+        if(objectValue != outputValue){
+            parameterValue = parameterValue + (objectValue - outputValue); // if the object has increased with y, we make sure the parameterValue is also increased with y; s.th. if macroValue remain unchanged, the outputValue and objectValue again allign
+            this.updateOutputValue;
+        }
+    }
+
 } 
 
 BoolLangTarget : AbstractTarget {
-    var <methodKey, <parameterValue, <>outputValue;
+    var parameterValue, >outputValue;
 
     *new { |object, methodKey|
         ^super.new.init(object,methodKey);
@@ -312,13 +351,13 @@ BoolLangTarget : AbstractTarget {
 
     init { |object_, methodKey_|
         object = object_;
-        methodKey = methodKey_;
-        if(object.respondsTo(methodKey)){ initialValue = object.perform(methodKey) }{ initialValue = false }; // hereby we allow for object which only have a setter method
+        key = methodKey_;
+        if(object.respondsTo(key)){ initialValue = object.perform(key) }{ initialValue = false }; // hereby we allow for object which only have a setter method
         parameterValue = initialValue;
     }
 
     writeOutputValue {
-        object.perform(methodKey.asSetter,outputValue);
+        object.perform(key.asSetter,outputValue);
     }
 
     updateOutputValue {
@@ -329,5 +368,25 @@ BoolLangTarget : AbstractTarget {
         parameterValue = val.asBoolean;
         this.updateOutputValue;
         this.writeOutputValue;
+    }
+
+    parameterValue {
+        if(object.respondsTo(key)){ this.makeConsistent };
+        ^parameterValue;
+    }
+
+    outputValue {
+        if(object.respondsTo(key)){ this.makeConsistent };
+        ^outputValue;
+    }
+
+    makeConsistent {
+        // we check whether the output value on the object side has changed since the last time we wrote it from here; this means another method has modified the variable and we need to update
+        var objectValue;
+        objectValue = object.perform(key);
+        if(objectValue != outputValue){
+            parameterValue = parameterValue.not; // if the object has changed, it means it has flipped, so we flip as well
+            this.updateOutputValue;
+        }
     }
 }

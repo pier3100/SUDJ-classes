@@ -1,19 +1,20 @@
 PLC {
-    var <>funcList, <clock, <routine;
+    // executes a list of functions periodically, calls to the functions are surpressed when the function active evaluates false
+    var <>funcList, <clock, <routine, <active = true;
 
-    *new { |tempo = 1|
-        ^super.new.init(tempo);
+    *new { |tempo = 1, active|
+        ^super.new.init(tempo, active);
     }
 
-    init { |tempo_|
+    init { |tempo_, active_|
         funcList = FunctionList.new;
-
         clock = TempoClock.new(tempo_).permanent = true;//create a TempoClock with desired tempo, and make sure it survives Cmd+.
+        active_ !? {active = active_ };
 
         routine = Routine{
             inf.do{ |i|
                 clock.timeToNextBeat.wait; //wait till next cyle start
-                funcList.value;     //run all functions
+                if(active.value){ funcList.value };     //run all functions
                 0.1.wait;       //should be lower then cycle length, is required in order to make sure not two cycles are computed directly after each other
             };
         };

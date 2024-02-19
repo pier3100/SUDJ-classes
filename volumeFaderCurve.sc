@@ -1,7 +1,7 @@
 VolumeFaderCurve {
     *kr { arg in;
         //^in*in.linlin(0,1,-60,0).dbamp;
-        ^in;
+        ^in**2;
     }
 }
 

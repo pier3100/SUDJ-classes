@@ -5,6 +5,8 @@ MidiHidSystem : Object {
     classvar <>activeMacroTarget, <dummyTarget;
     classvar <plcMacroMapping;
     classvar <>globalSensitivity = 1, <>globalSensitivitySetpoint = 0.2, <activateGlobalSensitivity = false;
+    classvar <>enabled = true;
+
     // add this level we only setup the required infrastructure for macro mapping
 
     *new { |macroMappingFreq = 10|
@@ -13,7 +15,7 @@ MidiHidSystem : Object {
     }
 
     *prInit { |macroMappingFreq = 10|
-        plcMacroMapping = PLC.new(macroMappingFreq); // for macromapping from server to language
+        plcMacroMapping = PLC.new(macroMappingFreq, active: { enabled }); // for macromapping from server to language
         this.initDummyBus;
         instanceList = List.new(10);
         initializedMidiHid = true;
@@ -90,6 +92,18 @@ MidiHidSystem : Object {
         instanceList.do({ |item| item.resetInitial });
     }
 
+    *post {
+        instanceList.do({ |item, k| "%: ".postf( k ); item.postInfo });
+    }
+
+    *remove { |index|
+        // remove the mapping by index
+        var instanceToRemove;
+        instanceToRemove = instanceList.removeAt(index);
+        instanceToRemove.remove;
+        instanceToRemove = nil;
+    }
+
     == { |aMidiHidSystemInstance|
 		^this.compareObject(aMidiHidSystemInstance, #[\source, \target]);
 	}
@@ -97,6 +111,7 @@ MidiHidSystem : Object {
 	hash {
 		^this.instVarHash(#[\source, \target]);
 	}
+
 }
 
 MidiHidSystemTemplate : MidiHidSystem {
@@ -163,6 +178,16 @@ MidiHidSystemTemplate : MidiHidSystem {
         //to be implemented in subclass
     }    
 
+    postInfo {
+        "\tSource: \t[%, \t%, \t%]\n".postf( source.midiCC, source.midiChannel, source.midiDevice.nameInput );
+        "\tTarget: \t%\n".postf( target.asCompileString );
+		"\tTargetOut: \t%\n".postf( targetOut.asCompileString );
+    }
+
+    remove {
+
+    }
+
 /*     isSameMapping { |anotherInstance|
         var targetIsSame;
         if(anotherInstance.target == this.target){
@@ -189,13 +214,22 @@ MidiSystem : MidiHidSystemTemplate {
         MIDIClient.initialized.not.if{ MIDIClient.init };
         MIDIIn.connectAll;
         
-        plcMidiFeedback = PLC.new(midiFeedbackFreq);
+        plcMidiFeedback = PLC.new(midiFeedbackFreq, active: { enabled });
         
         initializedMidi = true;
     }
 
     *resetLibraries {
         initializedMidi.if({ plcMidiFeedback.reset});
+    }
+
+    add {
+        instanceList.add(this);
+        targetOut !? { plcMidiFeedback.add({ this.feedback }) }; //for midi feedback
+    }
+
+    remove {
+        plcMidiFeedback.remove({ this.feedback });
     }
 }
 
@@ -236,11 +270,6 @@ MidiCC : MidiSystem {
         this.add;
     }
 
-    add {
-        instanceList.add(this);
-        targetOut !? { plcMidiFeedback.add({ this.feedback }) }; //for midi feedback
-    }
-
     onInput { |val|
         // this will be called upon an incoming message 
         if(active.value){ // only execute if active
@@ -256,14 +285,13 @@ MidiCC : MidiSystem {
             value = val.linlin(0,127,0,1);//map the midi value to a value between 0,1
         }{
             if(mode==\forwardBackwardButton){ // to be used for encoders mapping to pitchbending
-                var amount;
-                amount =  modifiedSensitivity + this.accelerate(time.timeDifference,modifiedSensitivity);
-                if(val==127){ value = amount.neg }{ value = amount };
+                if(val>60){ increment = val - 128}{ increment = val };//definition of relative behavior; XoneDX encoder go from 1 to 5 for clockwise turning slow to fast; and fo from 127 to 122 for anti clockwise slow to fast
+                value = modifiedSensitivity * increment * (1 + this.accelerate(time.timeDifference,modifiedSensitivity));
             }{  //we can assume mode is relative, because we checked it earlier on
                 currentValue = target.parameterValue;
-                if(val==127){ increment = -1/128}{ increment = 1/128 };//definition of relative behavior
+                if(val>60){ increment = (val - 128) / 128}{ increment = val / 128 };//definition of relative behavior
                 value = currentValue + (modifiedSensitivity * increment);
-                if(constrained){ value = value.clip(0,1) };
+                //if(constrained){ value = value.clip(0,1) };
         }};
         ^value;
     }
@@ -283,7 +311,7 @@ MidiCC : MidiSystem {
     }
 
     prepareFeedbackMessage {
-        ^[source.midiChannel, source.midiCC, targetOut.value.linlin(0,1,0,127.99).floor];
+        ^[source.midiChannel, source.midiCC, 10]; //[source.midiChannel, source.midiCC, targetOut.value.linlin(0,1,0,127.99).floor];
     }
 
 }
@@ -374,14 +402,9 @@ MidiButton : MidiSystem {
         delayedEventOccured = false; // we reset this to the default value
     }
 
-    add {
-        instanceList.add(this);
-        targetOut !? { plcMidiFeedback.add({ this.feedback }) }; //for midi feedback
-    }
-
     feedback {
         var message, value;
-        value = targetOut.value;
+        value = targetOut.asInteger.value;
         if(active.value){// only send the feedback when the mapping is active
             if(value == 1){ 
                 message = [source.midiChannel, source.midiCC, 127];

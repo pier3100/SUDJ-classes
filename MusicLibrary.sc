@@ -7,6 +7,7 @@ DONE
 - speedup updating from traktor by looking at Traktor modified date
 - test updating from Traktor
 - use a collection instead of an array, because we can then use the traktor id for fast lookup; or perhaps better make a seperate lookup table, which just contains all ids and array index; we cannot modify an existing method from array or its super classes, because these classes do not assume unique methods, so do not implement a hash functions, so it won't be fast
+    - for playlists: make an array of the id's (which can then be directly used for fast lookup)
  */
 
 MusicLibrary {
@@ -29,6 +30,7 @@ MusicLibrary {
                 instance.loadPlaylistsFromTraktor(collectionText); // overwrite all playlists
             }{
                 Library.put(\musicLibrary,instance); // should happen before loading the playlists, because the Playlist.new method lookup the tracks in the musicLibrary
+                "Reusing existing music library, no need to update".log;
             }
         }{
             instance = this.newFromTraktor(traktorLibraryPath);

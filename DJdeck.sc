@@ -5,6 +5,7 @@ TODO
 - test
     - interface functionality
     - beat sync accuracy
+- build synthdef which has DJ filter, using deadduck VST
     
 NICE TO HAVE
 - get rid of popping when beatjumping
@@ -63,7 +64,7 @@ NOT NEEDED
 
 DJdeck : Object {
     var <bus, <clock, <buffer, <synth, <referenceBus, <track;
-    var trackTempo = 1, quePoint = 0, schedJump = false, <loop = false, beatJumpBeats = 4;
+    var trackTempo = 1, <quePoint = 0, schedJump = false, <loop = false, beatJumpBeats = 4;
     var <trackBufferReady = false;
     var testBus, testBuffer;
     var userInducedGridOffsetTotal = 0, <userInducedGridOffsetStatic = 0;
@@ -189,7 +190,7 @@ DJdeck : Object {
 
     que {
         if(clock.paused){
-            if(this.beats = quePoint){
+            if(this.beats == quePoint){
                 this.playQue;
             }{
                 this.setQue;
@@ -202,6 +203,7 @@ DJdeck : Object {
 
     pitchbend_ { |intensity = 1|
         synth.set(\bendEvent, 1.0.rand, \bendIntensity, intensity);
+        intensity.postln;
     }
 
     needledropping_ { |relativePosition|
@@ -244,7 +246,7 @@ DJdeck : Object {
 
     jumpToQue {
         this.pause;
-        clock.beats(quePoint);
+        clock.beats_(quePoint);
     }
 
     // backend: other
@@ -354,7 +356,7 @@ DJdeck : Object {
                 // we can't use the clock.beats value here, since this value remains unchanged during a scheduled function call, since this freezes the logical time
                 this.jumpToBeat(theChangerValue);
                 theChangerValue.postln;
-                theChanged.beats.postln;
+                // theChanged.beats.postln;
             }
         }
     }

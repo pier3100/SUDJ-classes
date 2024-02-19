@@ -35,7 +35,7 @@ LibraryConsole {
     nextTrack_ { |direction = true|
         var increment;
         if(direction){ increment = 1 }{ increment = -1};
-        count = count + increment;
+        count = (count + increment).clip(0, activeTrackArrayFiltered.size - 1);
         ^prelistenDeck.loadTrack(activeTrackArrayFiltered[count]);
     }
 }

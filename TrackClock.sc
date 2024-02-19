@@ -24,7 +24,7 @@ TrackClock : TempoClock {
     var <beatOfTurning = 0;
     var <tempo = 1;
     var <paused = false;
-    var <fallbackTempo;
+    var <>fallbackTempo;
     var <sync = false, <>master;
 
 	*new { |tempoVal = 1, beats, seconds, queueSize=256|

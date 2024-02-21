@@ -8,6 +8,7 @@ TODO
 - build synthdef which has DJ filter, using deadduck VST
 - tracks should not loop
 - review sound quality
+- why can't I beatjump when paused?
     
 NICE TO HAVE
 - get rid of popping when beatjumping
@@ -73,6 +74,7 @@ DJdeck : Object {
     var userInducedGridOffsetTotal = 0, <userInducedGridOffsetStatic = 0;
     var <positionSetBus, <playerSelectionBus, <pauseBus;
     var <playerSelected = false;
+    var <endOfTrackEvent = true; // this makes sure that we prepare for the endOfTrack initially
 
     // basic
     *new { |bus, target, addAction = 'addToHead', deckNr|
@@ -183,7 +185,7 @@ DJdeck : Object {
         if(trackBufferReady && track.isNil.not){
             clock.resume;
             synth.set(\mute, 0); 
-            //synth.run(true);
+            if(endOfTrackEvent){ this.endOfTrackSched };
         }{"not ready".postln};
     }
 
@@ -327,13 +329,21 @@ DJdeck : Object {
 
     scheduleJump { |jumpAtBeat|
         if(schedJump.not){
-            clock.schedAbs(jumpAtBeat,{
+            clock.schedAbs(jumpAtBeat, {
                 clock.beats_((clock.beats+beatJumpBeats)); // we modify the clock's beats, the track follows via the .update callback
                 schedJump = false;
                 if(loop){ SystemClock.sched(0.1,{ this.scheduleJump(jumpAtBeat) }) }; // we need to schedule this a bit later in order to deal with the fact that logical time remains constant during a scheduled task;
             });
             schedJump = true;
         };
+    }
+
+    endOfTrackSched {
+        // when reaching the end of the track: pause (should be conditionally rescheduled every time we press play)
+        clock.schedAbs(track.duration * trackTempo, {
+            endOfTrackEvent = true;
+            this.pause;
+        });
     }
 
     jumpToBeat { |beat|
@@ -365,7 +375,7 @@ DJdeck : Object {
     }
 
     update { |theChanged, theChanger|
-    var theChangerKey, theChangerValue;
+        var theChangerKey, theChangerValue;
    
         if(theChanger.class == Array){ 
             # theChangerKey, theChangerValue = theChanger;

@@ -71,7 +71,8 @@ DJdeck : Object {
     var <trackBufferReady = false;
     var testBus, testBuffer;
     var userInducedGridOffsetTotal = 0, <userInducedGridOffsetStatic = 0;
-    var <positionSetBus, <jumpToPositionBus, <pauseBus;
+    var <positionSetBus, <playerSelectionBus, <pauseBus;
+    var <playerSelected = false;
 
     // basic
     *new { |bus, target, addAction = 'addToHead', deckNr|
@@ -89,7 +90,7 @@ DJdeck : Object {
         clock.addDependant(this);
         referenceBus = Bus.control(numChannels: 2);
         positionSetBus = Bus.control;
-        jumpToPositionBus = Bus.control;
+        playerSelectionBus = Bus.control; // initialized to 0, which corresponds with playerSelected = false
         pauseBus = Bus.control;
         buffer = Buffer.loadCollection(Server.default,[0, 0, 0, 0], 2, action: {this.spawnSynths(target, addAction)} ); // use .loadCollection instead of .alloc because it allows to supply an action function; after the buffer is setup, we create the synth
         // ideally I would free the buffer here, but then the buffer will be free before the synth is created
@@ -353,13 +354,14 @@ DJdeck : Object {
     jumpToPosition { |position|
         // make a track on the synth resume playing from position in frames
         // we use busses to obtain synchronicity between lang and server; we write a random number to the jumpToPositionNumber because this is the way I saw to transmit discrete signal to the server (in combination with a Changed UGen)
+        playerSelected = playerSelected.not; // we switch to the other player
         positionSetBus.setSynchronous(position);
-        jumpToPositionBus.setSynchronous(1.0.rand);
+        playerSelectionBus.setSynchronous(playerSelected.asInteger);
         this.updateUserInducedGridOffsetStatic; // after jumpting the reference and playalong bus are reset, hence we also need to reset/restore/update the userInducedGridOffset
     }
 
     spawnSynths { |target, addAction|
-        synth = Synth.newPaused("DJdeck", [\outputBus, bus, \bufnum, buffer, \deckTempoBus, clock.bus, \trackTempo, trackTempo, \referenceBus, referenceBus, \positionSetBus, positionSetBus, \jumpToPositionBus, jumpToPositionBus, \pauseBus, pauseBus], target, addAction);
+        synth = Synth.newPaused("DJdeck", [\outputBus, bus, \bufnum, buffer, \deckTempoBus, clock.bus, \trackTempo, trackTempo, \referenceBus, referenceBus, \positionSetBus, positionSetBus, \playerSelectionBus, playerSelectionBus, \pauseBus, pauseBus], target, addAction);
     }
 
     update { |theChanged, theChanger|
@@ -392,11 +394,14 @@ DJdeck : Object {
         Class.initClassTree(Sweep);
         Class.initClassTree(BufRd);
         Class.initClassTree(Out);
+        Class.initClassTree(DeckPlayer);
 
         // synthdef itself
-        SynthDef(\DJdeck, { |bufnum, outputBus = 0, referenceBufnum, referenceBus, mute = 0, positionSetBus, jumpToPositionBus, trackTempo, deckTempoBus, bendEvent, bendIntensity, pauseBus|
-            var rate, rateBended, trig, output, position, blockPosition, referencePosition, blockReferencePosition, jumpToPosition;
+        SynthDef(\DJdeck, { |bufnum, outputBus = 0, referenceBufnum, referenceBus, mute = 0, positionSetBus, playerSelectionBus, trackTempo, deckTempoBus, bendEvent, bendIntensity, pauseBus|
+            var rate, rateBended, trig, output, positionInput, position, blockPosition, referencePosition, blockReferencePosition, playerSelection;
             var bend;
+            var outputBundledP1, outputP1, positionP1, referencePositionP1;
+            var outputBundledP2, outputP2, positionP2, referencePositionP2;
 
             // pitch bending
             bend = Changed.kr(bendEvent);
@@ -408,24 +413,47 @@ DJdeck : Object {
             rateBended = rate + bend;
 
             // jumping
-            jumpToPosition = In.kr(jumpToPositionBus);
-            trig = T2A.ar(Changed.kr(jumpToPosition));
+            playerSelection = In.kr(playerSelectionBus); // we switch from player - with a short crossfade - when we do a beatjump
+            positionInput = In.kr(positionSetBus);
 
-            // position
-            //# blockPosition, blockReferencePosition = Integrator.kr([rateBended, rate],1-trig);
-            //position =  In.kr(positionSetBus) + (blockPosition* s.options.blockSize);
-            //referencePosition =  In.kr(positionSetBus) + (blockReferencePosition* s.options.blockSize);
+            // players
+            # outputP1, positionP1, referencePositionP1 = DeckPlayer.ar(playerSelection, bufnum, positionInput, rate, rateBended);
+            # outputP2, positionP2, referencePositionP2 = DeckPlayer.ar((1 - playerSelection), bufnum, positionInput, rate, rateBended);
 
-            position = In.kr(positionSetBus) + (SampleRate.ir * Sweep.ar(trig, rateBended));
-            referencePosition = In.kr(positionSetBus) + (SampleRate.ir * Sweep.ar(trig, rate));
+            // player addition
+            output = outputP1 + outputP2; // fading is integrated in the players themselves
+            position = (playerSelection * positionP1) + ((1 - playerSelection) * positionP2); // select position in accordance with the selected player
+            referencePosition = (playerSelection * referencePositionP1) + ((1 - playerSelection) * referencePositionP2);
 
-            // actual soundfile reading
-            output = BufRd.ar(2, bufnum, position);
+            // output
             output = output * Lag.kr(1 - mute, 0.01);
             Out.ar(outputBus, output);
 
             // for reference
-            Out.kr(referenceBus,[position, referencePosition]);
+            Out.kr(referenceBus, [position, referencePosition]);
         }).writeDefFile;
+    }
+}
+
+DeckPlayer {
+    *ar { |gate, bufnum, positionOffset, rate, rateBended|
+            var env, trig, position, positionOffsetLatched, referencePosition, output;
+
+            // trigger
+            trig = T2A.ar(PositiveEdge.kr(gate));
+
+            // position
+            positionOffsetLatched = Latch.kr(positionOffset, trig); // we only set the positionOffset upon switching to this player
+            position = positionOffsetLatched + (SampleRate.ir * Sweep.ar(trig, rateBended));
+            referencePosition = positionOffsetLatched + (SampleRate.ir * Sweep.ar(trig, rate));
+
+            // actual soundfile reading
+            output = BufRd.ar(2, bufnum, position);
+
+            // envelop
+            output = output * Linen.kr(gate, attackTime: 0.001, releaseTime: 0.001);
+
+            // return
+            ^[output, position, referencePosition];
     }
 }

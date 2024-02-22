@@ -24,18 +24,19 @@ MusicLibrary {
             instance = this.load(libraryPath);
             if(File.mtime(traktorLibraryPath) > File.mtime(libraryPath)){ // if traktor has recently updated the collection, we need to update our collection as well
                 var collectionText;
+                "Updating Traktor library".log(this);
                 collectionText = File.readAllString(traktorLibraryPath);
                 instance.updateTracksFromTraktor(collectionText, Date.rawSeconds(File.mtime(libraryPath)).asSortableString);
                 Library.put(\musicLibrary,instance); // should happen before loading the playlists, because the Playlist.new method lookup the tracks in the musicLibrary
                 instance.loadPlaylistsFromTraktor(collectionText); // overwrite all playlists
             }{
-                Library.put(\musicLibrary,instance); // should happen before loading the playlists, because the Playlist.new method lookup the tracks in the musicLibrary
                 "Reusing existing music library, no need to update".log(this);
+                Library.put(\musicLibrary,instance); // should happen before loading the playlists, because the Playlist.new method lookup the tracks in the musicLibrary
             }
         }{
+            "Loading library from Traktor from scratch".log(this);
             instance = this.newFromTraktor(traktorLibraryPath);
         };
-        currentEnvironment.postln;
         ^instance;
     }
 
@@ -63,11 +64,12 @@ MusicLibrary {
             string = substring.string;       
             dateModifiedTrack = string.lookup("MODIFIED_DATE").replace("\/");
             if(dateModifiedTrack > dateModifiedLibrary){ // we only need to load the track if it is updated recently; we compare the strings, which are suited for this purpose
-                try{      
-                    id = string.lookup("AUDIO_ID");
-                    track = this.findId(id); // retrieve track in library by looking it up by path
-                    track.fromTraktor(string);
-                }{i.postln; substring.string.postln};
+                id = string.lookup("AUDIO_ID");
+                track = this.findId(id); // retrieve track in library by looking it up by id
+                track !? {
+                    track.fromTraktor(string); 
+                    if(track.usable.not){ "track % not usable bit still in tracklist: \t %".format(i, substring.string).log(this) }; // this is a bit ugly because if the new Track information 
+                }
             }
         };
     }
@@ -82,10 +84,8 @@ MusicLibrary {
             var substring, track;
             substring = tracksText.findInBetween("<ENTRY", "</ENTRY>", previousIndex);
             previousIndex = substring.endIndex;
-            try{
-                track = TrackDescription.newFromTraktor(substring.string);
-                tracks.put(i,track);
-            }{i.postln; substring.string.postln};
+            track = TrackDescription.newFromTraktor(substring.string);
+            if(track.usable){ tracks.put(i, track) }{ "track % not usable: \t %".format(i, substring.string).log(this) };
         };
         tracks.removeNil;
         ^tracks;
@@ -158,14 +158,15 @@ Playlist {
         }{
             tracksIndex = Array.newClear(playlistLength);
             for(0,(playlistLength-1)){ |i|
-                var substring, trackIndex, path, indices;
+                var substring, trackIndex, path;
                 substring = playlistString.findInBetween("<ENTRY", "</ENTRY>", previousIndex);
                 previousIndex = substring.endIndex;
-                path = substring.string.lookup("KEY").traktorPath2path;
-                indices = Library.at(\musicLibrary).findPathIndices(path);
-                trackIndex = indices[0];
+                path = substring.string.lookup("KEY").formatPlain.traktorPath2path;
+                trackIndex = Library.at(\musicLibrary).findPathIndices(path)[0];
                 tracksIndex.put(i, trackIndex);
+                trackIndex ?? { "track missing in %: \t %".format(name, path).log(this) }
             };
+            tracksIndex.removeNil;
             output = this;
         };
         ^output;
@@ -231,7 +232,7 @@ Key {
 
 TrackDescription : SoundFile {
     //make a child from SoundFile
-    var <title, <artist, <key, <bpm, <gridOffset, <>userInducedGridOffset = 0, <id;
+    var <usable = true, <title, <artist, <key, <bpm, <gridOffset, <>userInducedGridOffset = 0, <id;
 
     *newDummy { |bpm, keyNumber|
         ^super.openRead(Platform.resourceDir +/+ "sounds/a11wlk01.wav").init(bpm, keyNumber);
@@ -247,12 +248,14 @@ TrackDescription : SoundFile {
     }
 
     fromTraktor { |string|
-        path = (string.lookup("VOLUME")++string.lookup("LOCATION DIR")++string.lookup("FILE")).traktorPath2path;
-        title = string.lookup("TITLE");
-        try{ artist = string.lookup("ARTIST") }{ artist = "EMPTY" };
-        key = Key.newFromTraktor(string.lookup("MUSICAL_KEY VALUE").asInteger);
-        bpm = string.lookup("TEMPO BPM").asFloat;
-        gridOffset = string.lookup("START").asFloat/1000;
+        path = (string.lookup("VOLUME")++string.lookup("LOCATION DIR")++string.lookup("FILE")).formatPlain.traktorPath2path;
+        title = string.lookup("TITLE").formatPlain;
+        artist = (string.lookup("ARTIST") ? "EMPTY").formatPlain;
+        key = string.lookup("MUSICAL_KEY VALUE");
+        if(key.isNil){ usable = false }{ key = Key.newFromTraktor(key.asInteger) };
+        bpm = string.lookup("TEMPO BPM");
+        if(bpm.isNil){ usable = false }{ bpm = bpm.asFloat };
+        gridOffset = (string.lookup("START") ? 0).asFloat/1000;
         id = string.lookup("AUDIO_ID");
         ^this;
     }
@@ -311,14 +314,12 @@ Substring {
     findInBetween { |stringA, stringB, offset = 0|
     // we output a subString such that subString.string is the string inbetween stringA and stringB, all contained in the receiver string
         var indexA, indexB, start, output;
-        try{ // this accounts for the case when there is not such a string
             indexA = this.find(stringA, offset: offset);
-            start = indexA + stringA.size;
-            indexB = this.find(stringB, offset: start);
-            output = Substring(this.mid(start, indexB - start), start, indexB);
-        }{
-            output = nil;
-        }
+            indexA !? {
+                start = indexA + stringA.size;
+                indexB = this.find(stringB, offset: start);
+                indexB !? { output = Substring(this.mid(start, indexB - start), start, indexB) };
+            };
         ^output;
     }
 

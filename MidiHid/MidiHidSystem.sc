@@ -422,6 +422,60 @@ MidiButton : MidiSystem {
     }
 }
 
+HidSystem : MidiHidSystemTemplate {
+    classvar <initializedHid = false;
+    
+    *new {
+        initializedHid.not.if({ this.initHid });
+        ^super.new;
+    }
+
+    *initHid {
+        HID.findAvailable;
+        HID.action_({ |val, valRaw, elementUsagePage, elementUsage, elementId, deviceId, device|
+            instanceList.do({ |item, i|
+                if(item.class.superClass == HidSystem){
+                    if(item.source.elementID == elementId && item.source.hidDevice == device){
+                        item.onInput(val);
+                    };
+                };
+            });
+        });
+        initializedHid = true;
+    }
+
+    *resetLibraries {
+    }
+
+    add {
+        instanceList.add(this);
+    }
+
+    remove {
+    }
+}
+
+HidCC : HidSystem {
+    var mode;
+    *new { |source, target, mode = \absolute, active = true|
+        ^super.new.init(source, target, mode, active).add;
+    }
+
+    init { |source_, target_, mode_, active_|
+        source = source_.asHidSource;
+        target = target_;
+        mode = mode_;
+        active = active_;
+    }
+
+    onInput { |val|
+        // this will be called upon an incoming message 
+        if(active.value){ // only execute if active
+            target.value(val);
+        }
+    }
+}
+
 MidiInOutPair : Object {
 	var <indexIn, <indexOut, <midiOut, <nameInput, <nameOutput;
 
@@ -491,6 +545,22 @@ MidiSource : Object { //Midi Source
 	}
 }
 
+HidSource {
+    var elementID, hidDevice;
+    *new { |elementID, hidDevice|
+        ^super.new.init(elementID, hidDevice);
+    }
+
+    init { |elementID_, hidDevice_|
+        elementID = elementID_;
+        hidDevice = hidDevice_;
+    }
+
+    asHidSource {
+        ^this;
+    }
+}
+
 MySynthDef : SynthDef {
     classvar <resetLibrary;
 
@@ -527,6 +597,10 @@ Time {
 + Array {
     asMidiSource {
         ^MidiSource.new(this[2], this[1], this[0]);
+    }
+
+    asHidSource {
+        ^HidSource.new(*this);
     }
 }
 

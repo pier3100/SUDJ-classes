@@ -1,14 +1,11 @@
 /* 
 TODO
-- finish midi mapping
-     - midi feedback
 - test
     - interface functionality
     - beat sync accuracy
-- build synthdef which has DJ filter, using deadduck VST
-- tracks should not loop
 - review sound quality
 - why can't I beatjump when paused?
+- keep syncing enabled when new track is loaded
     
 NICE TO HAVE
 - get rid of popping when beatjumping
@@ -17,6 +14,10 @@ NICE TO HAVE
 - BufRd has only single precision, so after 6.3min it becomes messy; I do like listening to long tracks... -> solution can be to overwrite the first part of the buffer when we start approaching the 6.3 min
 
 DONE
+- tracks should not loop
+- build synthdef which has DJ filter, using deadduck VST
+- finish midi mapping
+     - midi feedback
 - looping functionality
 - needledropping functionality (scrolling through track)
 - try to do all time sensitive shit with setSynchronous
@@ -218,7 +219,7 @@ DJdeck : Object {
     needledropping_ { |relativePosition|
         var jumpToBeat;
         jumpToBeat = (track.duration * relativePosition * trackTempo).round;
-        clock.beats_(jumpToBeat);
+        clock.beats_(jumpToBeat.min(this.time2beatAdjusted(track.duration))); // should go passed the end of the track
     }
 
     needledropping {
@@ -305,6 +306,10 @@ DJdeck : Object {
         ^(((position / track.sampleRate) - track.gridOffset) * trackTempo) - this.userInducedGridOffset;
     }
 
+    time2beatAdjusted { |time|
+        ^((time - track.gridOffset) * trackTempo) - this.userInducedGridOffset;
+    }
+
     updateUserInducedGridOffsetStatic {
         // this function is only valid is you use it while doing a beatjump, because this resets the current difference between playAlong and refernce buffer playback to zero
         userInducedGridOffsetStatic = userInducedGridOffsetTotal;
@@ -328,9 +333,9 @@ DJdeck : Object {
     }
 
     scheduleJump { |jumpAtBeat|
-        if(schedJump.not){
+        if(schedJump.not && (jumpAtBeat <= this.time2beatAdjusted(track.duration))){
             clock.schedAbs(jumpAtBeat, {
-                clock.beats_((clock.beats+beatJumpBeats)); // we modify the clock's beats, the track follows via the .update callback
+                clock.beats_((clock.beats + beatJumpBeats)); // we modify the clock's beats, the track follows via the .update callback
                 schedJump = false;
                 if(loop){ SystemClock.sched(0.1,{ this.scheduleJump(jumpAtBeat) }) }; // we need to schedule this a bit later in order to deal with the fact that logical time remains constant during a scheduled task;
             });
@@ -340,7 +345,7 @@ DJdeck : Object {
 
     endOfTrackSched {
         // when reaching the end of the track: pause (should be conditionally rescheduled every time we press play)
-        clock.schedAbs(track.duration * trackTempo, {
+        clock.schedAbs(this.time2beatAdjusted(track.duration), {
             endOfTrackEvent = true;
             this.pause;
         });

@@ -327,6 +327,7 @@ MidiButton : MidiSystem {
 
     *new { |source, targetOn, targetOff, mode = \push, delay = 0.0, active = true, targetOut|
         if(([\push, \toggle, \direct].includes(mode)).not){ Error("% is not a valid mode.".format(mode)).throw }; // throw an error when the mode is not valid
+        if(mode == \toggle && targetOn.respondsTo(\parameterValue).not){ Error("Toggle mode requires the target to respond to .parameterValue").throw };
         initializedMidiButton.not.if({ this.init });
         ^super.new.init(source, targetOn, targetOff, mode, delay, active, targetOut).add;
     }

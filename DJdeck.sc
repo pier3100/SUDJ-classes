@@ -6,7 +6,10 @@ TODO
 - review sound quality
 - why can't I beatjump when paused?
 - keep syncing enabled when new track is loaded
-    
+- allow unquantized beetjumping by default, and enable quantization via general quantization support for incoming midi/hid
+    - how to support different clocks? No need, we just put everything on the master clock, this is okay because the entire idea behind quantized/delayed beatjumpig, is to keep everything lined up with ease
+
+
 NICE TO HAVE
 - get rid of popping when beatjumping
 - reduce loading time of songs, make a function to preview songs which uses VDiskIn, which requires less buffer to be loaded as compared to ReadBuf
@@ -14,6 +17,7 @@ NICE TO HAVE
 - BufRd has only single precision, so after 6.3min it becomes messy; I do like listening to long tracks... -> solution can be to overwrite the first part of the buffer when we start approaching the 6.3 min
 
 DONE
+- use shift-sync to enable sync, and copy tempo from slave to master
 - tracks should not loop
 - build synthdef which has DJ filter, using deadduck VST
 - finish midi mapping
@@ -106,6 +110,7 @@ DJdeck : Object {
             if(track.isNil.not){ this.reset }; // reset the deck if not done so yet
             track = newTrack;
             trackTempo = track.bpm/60;
+            if(clock.sync.not){ clock.tempoInterface_(trackTempo) }; // play track at normal rate if not synced
             userInducedGridOffsetStatic = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
             clock.beats = this.position2beatAdjusted(0);
             // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading

@@ -170,8 +170,8 @@ TrackClock : TempoClock {
             master = master_; // we store it such that there is no confusion to whom we are being synced; hence we can easily desync
         };
         master.dependants.asArray.do({ |item| item.deactiveSync }); // stop all other clocks from syncing to the master including me
-        master.tempo = this.tempo; // now sync the master to me at this instance
-        master.beat = this.beat; 
+        master.tempo = this.tempoInterface; // now sync the master to me at this instance
+        master.beats = this.beats; 
         this.activateSync; // slave/sync me to the master
     }
 

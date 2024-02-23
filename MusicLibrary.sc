@@ -232,7 +232,7 @@ Key {
 
 TrackDescription : SoundFile {
     //make a child from SoundFile
-    var <usable = true, <title, <artist, <key, <bpm, <gridOffset, <>userInducedGridOffset = 0, <id;
+    var <usable = true, <title, <artist, <key, <bpm, <gridOffset, <>userInducedGridOffset = 0, <id, <preceivedDb;
 
     *newDummy { |bpm, keyNumber|
         ^super.openRead(Platform.resourceDir +/+ "sounds/a11wlk01.wav").init(bpm, keyNumber);
@@ -257,6 +257,8 @@ TrackDescription : SoundFile {
         if(bpm.isNil){ usable = false }{ bpm = bpm.asFloat };
         gridOffset = (string.lookup("START") ? 0).asFloat/1000;
         id = string.lookup("AUDIO_ID");
+        preceivedDb = string.lookup("PERCEIVED_DB");
+        if(preceivedDb.isNil){ usable = false }{ preceivedDb = preceivedDb.asFloat };
         ^this;
     }
 

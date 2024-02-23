@@ -311,7 +311,7 @@ MidiCC : MidiSystem {
     }
 
     prepareFeedbackMessage {
-        ^[source.midiChannel, source.midiCC, source.midiChannel, source.midiCC, targetOut.value.asFloat.linlin(0,1,0,127.99).floor]; // we use asFloat to account for targetOut returning a boolean
+        ^[source.midiChannel, source.midiCC, targetOut.value.asFloat.linlin(0,1,0,127.99).floor]; // we use asFloat to account for targetOut returning a boolean
     }
 
 }

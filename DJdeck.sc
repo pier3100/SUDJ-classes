@@ -115,7 +115,7 @@ DJdeck : Object {
             clock.beats = this.position2beatAdjusted(0);
             // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
             buffer = track.loadBuffer(action: { trackBufferReady = true; this.reactivateSynth; action.value });
-            synth.set(\trackTempo, trackTempo); 
+            synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadTrack: \t"++track.artist++", "++track.title).log(this);
         }{
             "track is still playing".postln;
@@ -140,7 +140,7 @@ DJdeck : Object {
             buffer = djDeck.buffer;
             trackBufferReady = true;
             this.reactivateSynth;
-            synth.set(\trackTempo, trackTempo); 
+            synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadDouble: \t"++track.artist++", "++track.title).log(this);
         }{
             "track is still playing".postln;
@@ -188,7 +188,7 @@ DJdeck : Object {
     }
 
     play {
-        if(trackBufferReady && track.isNil.not){
+        if(trackBufferReady && track.isNil.not && (clock.beats < this.time2beatAdjusted(track.duration))){
             clock.resume;
             synth.set(\mute, 0); 
             if(endOfTrackEvent){ this.endOfTrackSched };
@@ -300,7 +300,7 @@ DJdeck : Object {
     }
 
     position2beat { |position|
-        ^((position / track.sampleRate)* trackTempo);
+        ^((position / track.sampleRate) * trackTempo);
     }
 
     beat2positionAdjusted { |beat|
@@ -417,7 +417,7 @@ DJdeck : Object {
         Class.initClassTree(DeckPlayer);
 
         // synthdef itself
-        SynthDef(\DJdeck, { |bufnum, outputBus = 0, referenceBufnum, referenceBus, mute = 0, positionSetBus, playerSelectionBus, trackTempo, deckTempoBus, bendEvent, bendIntensity, pauseBus|
+        SynthDef(\DJdeck, { |bufnum, outputBus = 0, referenceBufnum, referenceBus, mute = 0, positionSetBus, playerSelectionBus, trackTempo, deckTempoBus, bendEvent, bendIntensity, pauseBus, gain|
             var rate, rateBended, trig, output, positionInput, position, blockPosition, referencePosition, blockReferencePosition, playerSelection;
             var bend;
             var outputBundledP1, outputP1, positionP1, referencePositionP1;
@@ -446,6 +446,7 @@ DJdeck : Object {
             referencePosition = (playerSelection * referencePositionP1) + ((1 - playerSelection) * referencePositionP2);
 
             // output
+            output = output * gain;
             output = output * Lag.kr(1 - mute, 0.01);
             Out.ar(outputBus, output);
 

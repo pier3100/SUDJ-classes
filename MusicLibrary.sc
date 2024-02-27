@@ -66,7 +66,10 @@ MusicLibrary {
             if(dateModifiedTrack > dateModifiedLibrary){ // we only need to load the track if it is updated recently; we compare the strings, which are suited for this purpose
                 id = string.lookup("AUDIO_ID");
                 track = this.findId(id); // retrieve track in library by looking it up by id
-                track !? {
+                if(track.isNil){ 
+                    tracks.add(TrackDescription.newFromTraktor(string));
+                     "track % appended to tracklist: \t %".format(i, substring.string).log(this);
+                    }{
                     track.fromTraktor(string); 
                     if(track.usable.not){ "track % not usable bit still in tracklist: \t %".format(i, substring.string).log(this) }; // this is a bit ugly because if the new Track information 
                 }
@@ -113,7 +116,7 @@ MusicLibrary {
         ^tracks;
     }
 
-    findTitle { |string|
+    findTrackByTitle { |string|
         // rewrite using .selectIndices(function)
         var result = Array.new(this.tracks.size);
         tracks.do({ |item, i| if(item.title.find(string).isNil.not){ result.add(item) } });
@@ -135,6 +138,10 @@ MusicLibrary {
 
     findPathIndices { |path|
         ^tracks.selectIndices({ |item, i| item.path == path });
+    }
+
+    findPlaylistByTitle { |string|
+        ^playlists.select({ |item| item.name.find(string).isNil.not });
     }
 
     store { |path|

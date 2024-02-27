@@ -15,17 +15,15 @@ LibraryConsole {
     }
 
     filter { |tolerance|
+        // tolerance should be 1, 2, or 3; wherby 3 is no constraint, and 1 is tracks which match closely
+        // TODO: perhaps change to a value between 0, 1, that way we can also map it to a slider o.a.
         var toleranceRounded;
-        toleranceRounded  = tolerance.round;
-        // for compatibility with filterBPM, we make sure it is not 3
-        if(toleranceRounded == 3){ 
-            if(toleranceRounded <= 3){
-                toleranceRounded = 2;
-                }{
-                toleranceRounded = 4;
-            }
-        }
-        ^activeTrackArrayFiltered = activeTrackArray.filterBPM(referenceTrack.bpm - (tolerance * 4),referenceTrack.bpm + (tolerance * 4), toleranceRounded).filterKey(referenceTrack.key, referenceTrack.bpm, tolerance).randomize;
+        toleranceRounded  = tolerance.round.asInteger;
+        activeTrackArrayFiltered = switch(toleranceRounded)
+            { 1 } { activeTrackArray.filterBPM(referenceTrack.bpm - (tolerance * 4),referenceTrack.bpm + (tolerance * 4), toleranceRounded).filterKey(referenceTrack.key, referenceTrack.bpm, tolerance).randomize }
+            { 2 } { activeTrackArray.filterBPM(referenceTrack.bpm - (tolerance * 4),referenceTrack.bpm + (tolerance * 4), toleranceRounded).filterKey(referenceTrack.key, referenceTrack.bpm, tolerance).randomize }
+            { 3 } { activeTrackArray.randomize };
+        ^activeTrackArrayFiltered;
     }
 
     setReferenceTrack {

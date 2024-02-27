@@ -483,9 +483,9 @@ MidiInOutPair : Object {
 	*new { |nameIn, nameOut| //standard way of initiating is by providing a part of the name
 		var tempIndexIn, tempIndexOut;
         MIDIClient.initialized.not.if({MIDIClient.init()});
-        tempIndexIn = MIDIClient.sources.detectIndex { |endpoint| endpoint.name.contains(nameIn)};
+        (tempIndexIn = MIDIClient.sources.detectIndex { |endpoint| endpoint.name.contains(nameIn)}) ?? { "WARNING: indexIn = Nil for %".format(nameIn).log(this) };
         nameOut !?({
-            tempIndexOut = MIDIClient.destinations.detectIndex { |endpoint| endpoint.name.contains(nameOut)}
+            (tempIndexOut = MIDIClient.destinations.detectIndex { |endpoint| endpoint.name.contains(nameOut)}) ?? { "WARNING: indexOut = Nil for %".format(nameOut).log(this) };
         });
 		^super.new.init(tempIndexIn,tempIndexOut);
 	}

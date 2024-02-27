@@ -20,9 +20,9 @@ LibraryConsole {
         var toleranceRounded;
         toleranceRounded  = tolerance.round.asInteger;
         activeTrackArrayFiltered = switch(toleranceRounded)
-            { 1 } { activeTrackArray.filterBPM(referenceTrack.bpm - (tolerance * 4),referenceTrack.bpm + (tolerance * 4), toleranceRounded).filterKey(referenceTrack.key, referenceTrack.bpm, tolerance).randomize }
-            { 2 } { activeTrackArray.filterBPM(referenceTrack.bpm - (tolerance * 4),referenceTrack.bpm + (tolerance * 4), toleranceRounded).filterKey(referenceTrack.key, referenceTrack.bpm, tolerance).randomize }
-            { 3 } { activeTrackArray.randomize };
+            { 1 } { activeTrackArray.filterBPM(referenceTrack.bpm - (tolerance * 4),referenceTrack.bpm + (tolerance * 4), toleranceRounded).filterKey(referenceTrack.key, referenceTrack.bpm, tolerance).scramble }
+            { 2 } { activeTrackArray.filterBPM(referenceTrack.bpm - (tolerance * 4),referenceTrack.bpm + (tolerance * 4), toleranceRounded).filterKey(referenceTrack.key, referenceTrack.bpm, tolerance).scramble }
+            { 3 } { activeTrackArray.scramble };
         ^activeTrackArrayFiltered;
     }
 

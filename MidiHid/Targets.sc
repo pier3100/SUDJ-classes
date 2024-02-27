@@ -1,6 +1,9 @@
 /* 
 TODO
-- no feedback needed when in absolute mode
+- make set/get work, because we map a bus to a control input, we cannot acces the control input anymore by get/set; which is actually just a deficiency of the language
+    -> implemented workaround, we should write down which busses are mapped to which controls, then we can reroute the get/set call to that bus, which we do by overwriting the method as defined in the Node class
+        - we cannot add variables to the nodeclass
+        - we can perhaps write it down in the dependants system; we make an object NoteBusMapping (note, not node, because this object is nothing more then just writing the information down), this object contains all relevant info and just return itself on .value
 - test preset system
     -> IMPORTANT: I realized that the preset has nothing to do with the controller/mapping; I should be completely independent; I has to do with the parameters of the synths and other devices (I realized that in Bitwig it stores the parameters of your synths irespective of your controller)
 - test feedback for buttons
@@ -29,6 +32,7 @@ NICE TO HAVE
 
 OBSOLETE
 - implement preset system
+- no feedback needed when in absolute mode
 
 DONE
 - midifeedback for buttons (start with buttons on XoneDX)

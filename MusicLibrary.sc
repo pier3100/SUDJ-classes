@@ -184,7 +184,7 @@ Playlist {
     }
 
     randomTrack { 
-        ^Library.at(\musicLibrary).tracks[tracksIndex[tracksIndex.size.rand]];
+        ^Library.at(\musicLibrary).tracks[tracksIndex.rand];
     }
 }
 
@@ -377,10 +377,6 @@ Substring {
 
     rand {
         ^this.at(this.size.rand);
-    }
-
-    randomize {
-        ^this.at(Array.rand(this.size, 0, (this.size - 1)));
     }
 }
 

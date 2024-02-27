@@ -143,7 +143,7 @@ DJdeck : Object {
             synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadDouble: \t"++track.artist++", "++track.title).log(this);
         }{
-            "track is still playing".postln;
+            "track is still playing on deck %".format(deckNr).log(this);
         }
     }
 
@@ -156,13 +156,13 @@ DJdeck : Object {
         if(clock.paused){
             this.reset;
         }{
-            "track is still playing".postln;
+            "track is still playing on deck %".format(deckNr).log(this);
         }
     }
 
     // frontend: clock
     sync_ { |bool|
-        if(bool){ clock.activateSync }{ clock.deactiveSync };
+        if(bool){ clock.activateSync; "engage sync on deck %".format(deckNr).log(this); }{ clock.deactiveSync; "disengage sync on deck %".format(deckNr).log(this);  };
     }
 
     sync {
@@ -179,6 +179,7 @@ DJdeck : Object {
 
     setAsMaster {
         clock.syncMasterToMe;
+        "sync master on deck %".format(deckNr).log(this);
     }
 
     // frontend: playback

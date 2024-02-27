@@ -272,7 +272,7 @@ MidiCC : MidiSystem {
 
     onInput { |val|
         // this will be called upon an incoming message 
-        if(active.value){ // only execute if active
+        if(active.value(this)){ // only execute if active
             target.value(this.messageMapping(val));
             targetOut !? { this.feedback }; // we directly give feedback
         }
@@ -307,7 +307,7 @@ MidiCC : MidiSystem {
     feedback {
         var message;
         message = this.prepareFeedbackMessage;
-        if(active.value){ source.midiDevice.midiOut.control(*message) }; // only send the feedback when the mapping is active
+        if(active.value(this)){ source.midiDevice.midiOut.control(*message) }; // only send the feedback when the mapping is active
     }
 
     prepareFeedbackMessage {
@@ -380,7 +380,7 @@ MidiButton : MidiSystem {
     }
 
     noteOnAction { |val|
-        if(active.value){
+        if(active.value(this)){
             if(delay > 0){ // to implement that a certain amount of time needs to be pushed before the action takes place, we schedule the task and cancel it if we release it earlier
                 dynamicTask.sched(delay); // sched the normal behavior (we have determined that dynamicTask = normal behavior earlier)
             }{ 
@@ -406,7 +406,7 @@ MidiButton : MidiSystem {
     feedback {
         var message, value;
         value = targetOut.asInteger.value;
-        if(active.value){// only send the feedback when the mapping is active
+        if(active.value(this)){// only send the feedback when the mapping is active
             if(value == 1){ 
                 message = [source.midiChannel, source.midiCC, 127];
                 source.midiDevice.midiOut.noteOn(*message);
@@ -471,7 +471,7 @@ HidCC : HidSystem {
 
     onInput { |val|
         // this will be called upon an incoming message 
-        if(active.value){ // only execute if active
+        if(active.value(this)){ // only execute if active
             target.value(val);
         }
     }

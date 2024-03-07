@@ -27,8 +27,11 @@ DESIGN
     - lets define an object for the patternDefinition
 
 TODO
+- fix bug: /b_alloc: memory allocation failed, probably due to change from mono to stereo, and originating from buffer.copyTrimmed
 - midi feedback needs to be able to be also pushed from the side of the target, use dependency system
 - integrate into ecosystem
+    -> almost done
+    - bug needs to be fixed
 - midi mapping
 
 NICE TO HAVE
@@ -57,8 +60,8 @@ DONE
     -> the user needs to make sure he lines up the buffers and the patterns; this is a transparent approach and offers flexibility
 */
 
-Sampler {
-    var <outputBus, <bufferArray, <slotArray, clock, <isActive = false;
+DrumMachine {
+    var <outputBus, <target, <addAction, <bufferArray, <slotArray, clock, <isActive = false;
     var <patterns, <>selectedPatternIndex = 0, <multiSamplePaths, <>selectedMultiSampleIndex = 0;
     var <buttonEngaged = false, <buttonSlot = 0, <buttonStep = 0, <parameterChanged = false, previousPlayState = false;
 
@@ -66,12 +69,14 @@ Sampler {
         this.addSynthDef;
     }
 
-    *new { |nSlots, steps, aClock, folderPath, outputBus = 0|
-        ^super.new.init(nSlots, steps, aClock, folderPath, outputBus);
+    *new { |nSlots, steps, aClock, folderPath, outputBus = 0, target, addAction = 'addToHead'|
+        ^super.new.init(outputBus, target, addAction, nSlots, steps, aClock, folderPath);
     }
 
-    init { |nSlots, steps, aClock, folderPath, outputBus_|
+    init { |outputBus_, target_, addAction_, nSlots, steps, aClock, folderPath|
         outputBus = outputBus_;
+        target = target_;
+        addAction = Node.addActions.at(addAction_);
         clock = aClock ? TempoClock.new(2);
         bufferArray = BufferArray.new(nSlots);
         slotArray = Array.fill(nSlots, { SinglePatternPlayer.new(steps, clock) });
@@ -168,7 +173,7 @@ Sampler {
         var key, pathName;
         pathName = path.asPathName; //allow for both pathName and string input
         key = pathName.fileNameWithoutExtension.asSymbol;
-        ^SimpleMIDIFile.read(pathName.fullPath).asMultiPatternArray(16, { |index| Pbind(\instrument, \samplePlayer, \bus, outputBus, \buffer, bufferArray.bufferArray[index]) });
+        ^SimpleMIDIFile.read(pathName.fullPath).asMultiPatternArray(16, { |index| Pbind(\instrument, \samplePlayer, \group, target, \addAction, addAction, \bus, outputBus.index, \buffer, bufferArray.bufferArray[index]) });
     }
 
     loadAllPatternsAndMultiSamples { |folderPath|
@@ -178,7 +183,7 @@ Sampler {
         folderPath.asPathName.filesDo({ |path| if(path.extension == "wav"){ 
             multiSamplePaths.add(path.fullPath); // we store the path
             patternPath = path.pathOnly++path.fileNameWithoutExtension++".mid";
-            if(File.exists(patternPath)){ patterns.add(this.loadPattern(patternPath)); patternAllreadyAdded.add(patternPath) }{ patterns.add(Array.fill(4, { |i| SinglePatternDefinition.new(16, Pbind(\instrument, \samplePlayer, \bus, outputBus, \buffer, bufferArray.bufferArray[i])) })) }; // load if it exists, otherwise load a dummy     
+            if(File.exists(patternPath)){ patterns.add(this.loadPattern(patternPath)); patternAllreadyAdded.add(patternPath) }{ patterns.add(Array.fill(4, { |i| SinglePatternDefinition.new(16, Pbind(\instrument, \samplePlayer, \group, target, \addAction, addAction, \bus, outputBus.index, \buffer, bufferArray.bufferArray[i])) })) }; // load if it exists, otherwise load a dummy     
         } });
         folderPath.asPathName.filesDo({ |path| if((path.extension == "mid") && patternAllreadyAdded.includesEqual(path.fullPath).not){ 
             // now add the remaining patterns
@@ -216,11 +221,11 @@ Sampler {
             // we need to make some design choices, do we include a panner here (a panner per sample); or de want a panner per slot, or do we only need a panner for the entire sampler
             var env, envel,output;
             env = Env.new;
-            output = PlayBuf.ar(1, buffer, rate) * velocity;
+            output = PlayBuf.ar(2, buffer, rate) * velocity;
             envel = EnvGen.ar(env, doneAction: Done.freeSelf);
             output = output;
             Out.ar(bus, output);
-        }).writeDefFile; // write it to standard location, server will load it on boat
+        }).writeDefFile; // write it to standard location, server will load it on boot
     }
 }
 
@@ -290,13 +295,13 @@ BufferArray {
     }
 
     init { |size|
-        bufferArray = Array.fill(size, { Buffer.alloc(Server.default, 100) });
+        bufferArray = Array.fill(size, { Buffer.alloc(Server.default, 100, 2) });
     }
 
     loadSliced { |path, slices| 
         var nSlices, length, entireAudio;
         nSlices = slices ? bufferArray.size;
-        entireAudio = Buffer.readChannel(Server.default, path, channels: [1], action: { |buf|
+        entireAudio = Buffer.readChannel(Server.default, path, channels: [0, 1], action: { |buf|
             length = buf.numFrames;
             for(0, nSlices - 1){ |i|
                 entireAudio.copyTrimmed(bufferArray[i], ((length / nSlices) * i).asInteger, (length / nSlices).asInteger);

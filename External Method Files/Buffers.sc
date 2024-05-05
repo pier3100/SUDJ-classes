@@ -16,9 +16,7 @@
                 numFramesTrimmed = checkFrame - startFrame; 
                 buf.numFrames_(numFramesTrimmed);
                 Server.default.makeBundle(nil, {
-                    "m1".postln;
                     buf.alloc;
-                    "m2".postln;
                     this.copyData(buf, dstStartAt: 0, srcStartAt: startFrame, numSamples: numFramesTrimmed);
                     });
             } 

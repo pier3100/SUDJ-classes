@@ -277,7 +277,7 @@ DJdeck : Object {
 
     // backend: other
     reset {
-        this.update; // before removing the track we update the track description
+        this.update; // before removing the track we update the track description //TODO: shouldn't this be "updateTrackInformation" ?
         synth.run(false); // if we are not playing any track this synth is not active
         track = nil;
         trackBufferReady = false;

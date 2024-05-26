@@ -11,16 +11,16 @@ DONE
  */
 
 MusicLibrary {
-    var <>tracks, <>playlists;
+    var <>tracks, <>playlists, <barcodeDictionary;
 
     *load { |path|
         ^Object.readTextArchive(path);
     }
 
-    *loadFromTraktor{ |libraryPath, traktorLibraryPath|
+    *loadFromTraktor{ |libraryPath, traktorLibraryPath, forceLoad = false|
         // load the archived library and update it from the Traktor collection if needed, if no archive exists, create new library from scratch from the Traktor collection
         var instance;
-        if(File.exists(libraryPath)){
+        if(File.exists(libraryPath) && forceLoad.not){
             instance = this.load(libraryPath);
             if(File.mtime(traktorLibraryPath) > File.mtime(libraryPath)){ // if traktor has recently updated the collection, we need to update our collection as well
                 var collectionText;
@@ -108,8 +108,32 @@ MusicLibrary {
             previousIndex = playlistSubstring.endIndex;
             playlist = Playlist.newFromTraktor(playlistSubstring.string, this);
             playlist.isNil.not.if({playlists.add(playlist)});
-        }
+        };
+        playlists.removeNil;
+        this.barcodeDictionary_;
         ^playlists;
+    }
+
+    barcodeDictionary_ {
+        // we make an identity dictionary which maps the barcode ID to the playlist itself, we assume the ID is unique, if non we give a warning
+        barcodeDictionary = IdentityDictionary.new(playlists.size);
+        for(0, playlists.size - 1){ |i|
+            barcodeDictionary.putGet(playlists[i].barcodeId, playlists[i]) !? { "WARNING: non-unique barcode ID".log(this) };
+        }
+    }
+
+    exportBarcodes { |path|
+        // export a .csv file with in the first collumn the barcode, and in the second collumn the name of playlist
+        // it is important that we give the playlists extended names (so we should change the name = blabla line): names which contain the folders name to (example: "E3: UK hardcore" instead of "UK hardcode")
+        var csvFile, string, playlist;
+        csvFile = File.new(path, "w");
+        csvFile.write("barcode; name; \n");
+        for(0, playlists.size - 1){|i|
+            playlist = playlists[i];
+            string = playlist.barcodeId.asString.barcodeId2EAN13(1) ++ "; " ++ playlist.name ++ "; \n"; // we need to convert the barcode ID to an actual barcode
+            csvFile.write(string);
+        };
+        csvFile.close;
     }
 
     asArray {
@@ -150,7 +174,7 @@ MusicLibrary {
 }
 
 Playlist {
-    var <>name, <>tracksIndex;
+    var <>name, <>uuId, <>barcodeId, <>tracksIndex;
 
     *newFromTraktor { |playlistString|
         ^super.new.initFromTraktor(playlistString);
@@ -159,6 +183,8 @@ Playlist {
     initFromTraktor { |playlistString|
         var playlistLength, previousIndex = 0, output;
         name = playlistString.lookup("NAME");
+        uuId = playlistString.lookup("UUID");
+        barcodeId = this.uuId2barcodeId(uuId);
         playlistLength = playlistString.lookup("PLAYLIST ENTRIES").asInteger;
         if(playlistLength == 0){
             output = nil;
@@ -177,6 +203,12 @@ Playlist {
             output = this;
         };
         ^output;
+    }
+
+    uuId2barcodeId { |uuIdString|
+        // the uuID is expected to be 32 characters long, the barcodeID can only be 9 digits long, furthermore uuID is hexidecimal, while barcodeID should be decimal (since we can only communicate a decimal number via hidapi)
+        // we take a selection of digits
+        ^(uuIdString.digit*(2**Array.series(uuIdString.size,0,1))).sum.asString.copyRange(0,8).asSymbol;
     }
 
     asArray {

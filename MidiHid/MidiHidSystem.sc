@@ -433,11 +433,11 @@ HidSystem : MidiHidSystemTemplate {
 
     *initHid {
         HID.findAvailable;
-        HID.action_({ |val, valRaw, elementUsagePage, elementUsage, elementId, deviceId, device|
+        HID.action_({ |val, valRaw, elementUsage, elementUsagePage, elementId, element deviceId, device|
             instanceList.do({ |item, i|
-                if(item.class.superClass == HidSystem){
-                    if(item.source.elementID == elementId && item.source.hidDevice == device){
-                        item.onInput(val);
+                if(item.class.superclass == HidSystem){
+                    if(item.source.elementId == elementId && item.source.hidDevice == device){
+                        item.onInput(val, valRaw);
                     };
                 };
             });
@@ -473,6 +473,26 @@ HidCC : HidSystem {
         // this will be called upon an incoming message 
         if(active.value(this)){ // only execute if active
             target.value(val);
+        }
+    }
+}
+
+HidValRaw : HidSystem {
+    // this deviates from the standard, this target does not accept a 0, 1 value, but instead an integer
+    *new { |source, targetFunction, active = true|
+        ^super.new.init(source, targetFunction, active).add;
+    }
+
+    init { |source_, target_, active_|
+        source = source_.asHidSource;
+        target = target_;
+        active = active_;
+    }
+
+    onInput { |val, valRaw|
+        // this will be called upon an incoming message 
+        if(active.value(this)){ // only execute if active
+            target.value(valRaw);
         }
     }
 }
@@ -547,13 +567,13 @@ MidiSource : Object { //Midi Source
 }
 
 HidSource {
-    var elementID, hidDevice;
-    *new { |elementID, hidDevice|
-        ^super.new.init(elementID, hidDevice);
+    var <elementId, <hidDevice;
+    *new { |elementId, hidDevice|
+        ^super.new.init(elementId, hidDevice);
     }
 
-    init { |elementID_, hidDevice_|
-        elementID = elementID_;
+    init { |elementId_, hidDevice_|
+        elementId = elementId_;
         hidDevice = hidDevice_;
     }
 

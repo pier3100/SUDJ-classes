@@ -3,27 +3,36 @@
 - make it possible to to have no filter */
 
 LibraryConsole {
-    var <>activeTrackArray, <activeTrackArrayFiltered, <>prelistenDeck, <>referenceTrack, <>count = -1;
+    var masterClock, <>tempoFilter = 2, <>tempoMultiplier = 1, <>keyFilter = 3, <>activePlaylist, <activeTrackArrayFiltered, <>prelistenDeck, <>referenceTrack, <>count = -1;
 
-    *new { |prelistenDeck|
-        ^super.new.init(prelistenDeck);
+    *new { |prelistenDeck, masterClock|
+        ^super.new.init(prelistenDeck, masterClock);
     }
 
-    init { |prelistenDeck_|
+    init { |prelistenDeck_, masterClock_|
         prelistenDeck = prelistenDeck_;
+        masterClock = masterClock_;
         referenceTrack = TrackDescription.newDummy(125, 6);
     }
 
-    filter { |tolerance|
-        // tolerance should be 1, 2, or 3; wherby 3 is no constraint, and 1 is tracks which match closely
-        // TODO: perhaps change to a value between 0, 1, that way we can also map it to a slider o.a.
-        var toleranceRounded;
-        toleranceRounded  = tolerance.round.asInteger;
-        activeTrackArrayFiltered = switch(toleranceRounded)
-            { 1 } { activeTrackArray.filterBPM(referenceTrack.bpm - (tolerance * 4),referenceTrack.bpm + (tolerance * 4), toleranceRounded).filterKey(referenceTrack.key, referenceTrack.bpm, tolerance).scramble }
-            { 2 } { activeTrackArray.filterBPM(referenceTrack.bpm - (tolerance * 4),referenceTrack.bpm + (tolerance * 4), toleranceRounded).filterKey(referenceTrack.key, referenceTrack.bpm, tolerance).scramble }
-            { 3 } { activeTrackArray.scramble };
-        ^activeTrackArrayFiltered;
+    filter {
+        var bpmLowBound, bpmUpBound, bpmMultiplier, currentBpm;
+        currentBpm = masterClock.tempo * 60;
+        // the following defines the meaning of the tempoFilter parameter
+        switch(tempoFilter)
+            { 1 } { bpmLowBound = 0; bpmUpBound = currentBpm}
+            { 2 } { bpmLowBound = currentBpm - 10; bpmUpBound = currentBpm}
+            { 3 } { bpmLowBound = currentBpm - 3; bpmUpBound = currentBpm + 3}
+            { 4 } { bpmLowBound = currentBpm; bpmUpBound = currentBpm + 10}
+            { 5 } { bpmLowBound = currentBpm; bpmUpBound = inf};
+
+        // the following defines the meaning of the tkeyFilter parameter
+
+        activeTrackArrayFiltered = activePlaylist.asArray.filterBPM(bpmLowBound, bpmUpBound, tempoMultiplier);
+        //activeTrackArrayFiltered = activeTrackArrayFiltered.filterKey
+        activeTrackArrayFiltered = activeTrackArrayFiltered.scramble;
+        count = -1;
+        if(activeTrackArrayFiltered.isEmpty){ "filtered playlist is empty".log(this) };
     }
 
     setReferenceTrack {
@@ -32,8 +41,21 @@ LibraryConsole {
 
     nextTrack_ { |direction = true|
         var increment;
-        if(direction){ increment = 1 }{ increment = -1};
-        count = (count + increment).clip(0, activeTrackArrayFiltered.size - 1);
-        ^prelistenDeck.loadTrack(activeTrackArrayFiltered[count]);
+        if(activeTrackArrayFiltered.isEmpty.not){
+            if(direction){ increment = 1 }{ increment = -1};
+            count = (count + increment).clip(0, activeTrackArrayFiltered.size - 1);
+            ^prelistenDeck.loadTrack(activeTrackArrayFiltered[count]);
+        }
+
+    }
+
+    loadPlaylist { |playlist|
+        activePlaylist = playlist;
+        this.filter;
+    }
+
+    activeTrackArray_ {
+        // do nothing
+        // something calls this method from somewhere, but I don't understand where; but if I delete it I run into an error
     }
 }

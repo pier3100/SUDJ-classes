@@ -83,7 +83,7 @@ MusicLibrary {
         tracksText = collectionText.findInBetween("<COLLECTION", "</COLLECTION>").string;
         numberTracks = collectionText.lookup("COLLECTION ENTRIES").asInteger;
         tracks = Array.newClear(numberTracks);
-        for(0,(numberTracks-1)){ |i|
+        for(0, (numberTracks - 1)){ |i|
             var substring, track;
             substring = tracksText.findInBetween("<ENTRY", "</ENTRY>", previousIndex);
             previousIndex = substring.endIndex;
@@ -96,42 +96,69 @@ MusicLibrary {
 
     loadPlaylistsFromTraktor { |collectionText|
         //load playlists
-        var playlistsText, playlistSubstring, previousIndex = 0;
+        var playlistsText, playlistSubstring, playlistFolderSubstring, previousIndexPlaylistFolder = 0, previousIndexPlaylist;
         playlistsText = collectionText.findInBetween("<PLAYLISTS>", "</PLAYLISTS>").string;
-        playlists = Array.new(200);
-        previousIndex = 0;
-        while{
-            playlistSubstring = playlistsText.findInBetween("<NODE TYPE=\"PLAYLIST\"","</NODE>",previousIndex);
-            playlistSubstring.isNil.not;
-        }{
-            var substring, playlist;
-            previousIndex = playlistSubstring.endIndex;
-            playlist = Playlist.newFromTraktor(playlistSubstring.string, this);
-            playlist.isNil.not.if({playlists.add(playlist)});
-        };
-        playlists.removeNil;
+        playlists = MultiLevelIdentityDictionary.new;
+
+        // we start by opening the root folder and then recursively iterate
+        this.loadFolder(playlistsText, 0, playlists);
+
         this.barcodeDictionary_;
         ^playlists;
+    }
+
+    loadFolder { |playlistsText, startIndex, parentDictionary|
+        var previousIndex, thisFolder, nodeTypeSubstring, nodeType, nodeCountSubstring, nodeCount;
+        previousIndex = startIndex;
+        thisFolder = IdentityDictionary.new;
+        parentDictionary.put(playlistsText.findInBetween("NAME=\"","\"", startIndex).string.asSymbol, thisFolder); // add a new level/folder to out dictionary (folder system)
+        
+        nodeCountSubstring = playlistsText.findInBetween("<SUBNODES COUNT=\"","\"", startIndex);
+        nodeCount = nodeCountSubstring.string.asInteger;
+        previousIndex = nodeCountSubstring.endIndex;
+        for(0, (nodeCount - 1)){ |i|
+            nodeTypeSubstring = playlistsText.findInBetween("NODE TYPE=\"", "\"", previousIndex);
+            nodeType = nodeTypeSubstring.string;
+
+            if(nodeType == "FOLDER"){
+                previousIndex = this.loadFolder(playlistsText, nodeTypeSubstring.endIndex, thisFolder);
+            }{
+                if(nodeType == "PLAYLIST"){
+                    var playlist, playlistSubstring;
+                    playlistSubstring = playlistsText.findInBetween("<NODE TYPE=\"PLAYLIST\"","</NODE>", (nodeTypeSubstring.startIndex - 12));
+                    playlist = Playlist.newFromTraktor(playlistSubstring.string, this);
+                    playlist.isNil.not.if({thisFolder.put(playlist.name.asSymbol, playlist)});
+                    previousIndex = playlistSubstring.endIndex;
+                }{
+                    // if not a folder or playlist, ignor the node
+                    previousIndex = nodeTypeSubstring.endIndex; // update the index such that we continue to the next node
+                };
+            };
+        };
+        ^previousIndex;
+
     }
 
     barcodeDictionary_ {
         // we make an identity dictionary which maps the barcode ID to the playlist itself, we assume the ID is unique, if non we give a warning
         barcodeDictionary = IdentityDictionary.new(playlists.size);
-        for(0, playlists.size - 1){ |i|
-            barcodeDictionary.putGet(playlists[i].barcodeId, playlists[i]) !? { "WARNING: non-unique barcode ID".log(this) };
-        }
+        playlists.leafDo({ |key, item| 
+            barcodeDictionary.putGet(item.barcodeId, item) !? { "WARNING: non-unique barcode ID".log(this) };
+        })
     }
 
-    exportBarcodes { |path|
+    exportBarcodes { |path, folderNames|
         // export a .csv file with in the first collumn the barcode, and in the second collumn the name of playlist
         // it is important that we give the playlists extended names (so we should change the name = blabla line): names which contain the folders name to (example: "E3: UK hardcore" instead of "UK hardcode")
-        var csvFile, string, playlist;
+        var csvFile, string, folder, playlist;
         csvFile = File.new(path, "w");
         csvFile.write("barcode; name; \n");
-        for(0, playlists.size - 1){|i|
-            playlist = playlists[i];
-            string = playlist.barcodeId.asString.barcodeId2EAN13(1) ++ "; " ++ playlist.name ++ "; \n"; // we need to convert the barcode ID to an actual barcode
-            csvFile.write(string);
+        for(0, (folderNames.size - 1)){ |i|
+            folder = playlists.get(folderNames[i].asSymbol);
+            folder.do({ |key, playlist|
+                string = playlist.barcodeId.asString.barcodeId2EAN13(1) ++ "; " ++ folderNames[i].asString ++ ":: " ++ playlist.name ++ "; \n"; // we need to convert the barcode ID to an actual barcode
+                csvFile.write(string);
+            });
         };
         csvFile.close;
     }
@@ -399,11 +426,12 @@ Substring {
     }
 
     filterBPM { |lowBound, upBound, multiplier = 1|
-        // for multiplier == 1, this just return all tracks within the bounds, for multiplier == 2, we allow for speed which have double or halve the given bpm, and for multiplier == 4 viceversa
+        // for multiplier == 1, this just return all tracks within the bounds, for multiplier == 2, we allow for speed which have double, and for bpm 0.5 we allow for half (NOTE on legacy, it used to include multiplier 4)
         var indices;
         indices = this.selectIndices({ |item, i| (item.bpm >= lowBound) && (item.bpm <= upBound) });
-        if(multiplier == 2 || multiplier == 4){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm * 2) >= lowBound) && ((item.bpm * 2) <= upBound)) || (((item.bpm / 2) >= lowBound) && ((item.bpm / 2) <= upBound)) }) };
-        if(multiplier == 4){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm * 4) >= lowBound) && ((item.bpm * 4) <= upBound)) || (((item.bpm / 4) >= lowBound) && ((item.bpm / 4) <= upBound)) }) };
+        if(multiplier == 0.5){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm / 2) >= lowBound) && ((item.bpm / 2) <= upBound)) }) };
+        if(multiplier == 2){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm * 2) >= lowBound) && ((item.bpm * 2) <= upBound)) }) };
+        //if(multiplier == 4){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm * 4) >= lowBound) && ((item.bpm * 4) <= upBound)) || (((item.bpm / 4) >= lowBound) && ((item.bpm / 4) <= upBound)) }) };
         ^this.at(indices);
     }
 

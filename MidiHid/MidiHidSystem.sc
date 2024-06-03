@@ -408,11 +408,11 @@ MidiButton : MidiSystem {
         value = targetOut.asInteger.value;
         if(active.value(this)){// only send the feedback when the mapping is active
             if(value == 1){ 
-                message = [source.midiChannel, source.midiCC, 127];
+                message = [source.midiChannel, source.midiCC, source.midiDevice.lightingSkin[1]];
                 source.midiDevice.midiOut.noteOn(*message);
             }{ 
-                message = [source.midiChannel, source.midiCC, 0];
-                source.midiDevice.midiOut.noteOff(*message);
+                message = [source.midiChannel, source.midiCC, source.midiDevice.lightingSkin[0]];
+                source.midiDevice.midiOut.noteOn(*message);
             };
         };
     }
@@ -498,31 +498,33 @@ HidValRaw : HidSystem {
 }
 
 MidiInOutPair : Object {
-	var <indexIn, <indexOut, <midiOut, <nameInput, <nameOutput;
+	var <indexIn, <indexOut, <midiOut, <nameInput, <nameOutput, <lightingSkin;
 
-	*new { |nameIn, nameOut| //standard way of initiating is by providing a part of the name
+	*new { |nameIn, nameOut, sysexInit, lightingSkin| //standard way of initiating is by providing a part of the name
 		var tempIndexIn, tempIndexOut;
         MIDIClient.initialized.not.if({MIDIClient.init()});
         (tempIndexIn = MIDIClient.sources.detectIndex { |endpoint| endpoint.name.contains(nameIn)}) ?? { "WARNING: indexIn = Nil for %".format(nameIn).log(this) };
         nameOut !?({
             (tempIndexOut = MIDIClient.destinations.detectIndex { |endpoint| endpoint.name.contains(nameOut)}) ?? { "WARNING: indexOut = Nil for %".format(nameOut).log(this) };
         });
-		^super.new.init(tempIndexIn,tempIndexOut);
+		^super.new.init(tempIndexIn,tempIndexOut, sysexInit, lightingSkin);
 	}
 
-	*byIndex { |indexIn_, indexOut_|
+	*byIndex { |indexIn_, indexOut_, sysexInit, lightingSkin|
 		MIDIClient.initialized.not.if({MIDIClient.init()});
-		^super.new.init(indexIn_,indexOut_);
+		^super.new.init(indexIn_,indexOut_, sysexInit, lightingSkin);
 	}
 
-	init { |indexIn_, indexOut_|
+	init { |indexIn_, indexOut_, sysexInit, lightingSkin_|
 		indexIn = indexIn_;
 		indexOut = indexOut_;
         nameInput = MIDIClient.sources[indexIn].name;
 		indexOut !? {
             nameOutput = MIDIClient.destinations[indexOut].name;
             midiOut = MIDIOut(indexOut);
+            sysexInit !? { midiOut.sysex(Int8Array.newFrom(sysexInit)) }
         };
+        lightingSkin = lightingSkin_ ? [0, 127]; //standard feedback
 	}
 
 	isMidiInOutPair { 

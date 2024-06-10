@@ -3,7 +3,7 @@
 - make it possible to to have no filter */
 
 LibraryConsole {
-    var masterClock, <>tempoFilter = 2, <>tempoMultiplier = 1, <>keyFilter = 3, <>activePlaylist, <activeTrackArrayFiltered, <>prelistenDeck, <>referenceTrack, <>count = -1;
+    var masterClock, <tempoFilter = 2, <tempoMultiplier = 1, <keyFilter = 4, <>activePlaylist, <activeTrackArrayFiltered, <>prelistenDeck, <>referenceTrack, <>count = -1;
 
     *new { |prelistenDeck, masterClock|
         ^super.new.init(prelistenDeck, masterClock);
@@ -15,11 +15,29 @@ LibraryConsole {
         referenceTrack = TrackDescription.newDummy(125, 6);
     }
 
+    tempoFilter_ { |val|
+        tempoFilter = val;
+        this.changed(\tempoFilter);
+        this.filter;
+    }
+
+    tempoMultiplier_ { |val|
+        tempoMultiplier = val;
+        this.changed(\tempoMultiplier);
+        this.filter;
+    }
+
+    keyFilter_ { |val|
+        keyFilter = val;
+        this.changed(\keyFilter);
+        this.filter;
+    }
+
     filter {
-        var bpmLowBound, bpmUpBound, bpmMultiplier, currentBpm;
+        var bpmLowBound, bpmUpBound, bpmMultiplier, currentBpm, keyTolerance;
         currentBpm = masterClock.tempo * 60;
         // the following defines the meaning of the tempoFilter parameter
-        switch(tempoFilter)
+        switch(tempoFilter.asInteger)
             { 1 } { bpmLowBound = 0; bpmUpBound = currentBpm}
             { 2 } { bpmLowBound = currentBpm - 10; bpmUpBound = currentBpm}
             { 3 } { bpmLowBound = currentBpm - 3; bpmUpBound = currentBpm + 3}
@@ -27,12 +45,17 @@ LibraryConsole {
             { 5 } { bpmLowBound = currentBpm; bpmUpBound = inf};
 
         // the following defines the meaning of the tkeyFilter parameter
+        switch(keyFilter.asInteger)
+            { 1 } { keyTolerance = 0.1 }
+            { 2 } { keyTolerance = 1 }
+            { 3 } { keyTolerance = 2 }
+            { 4 } { keyTolerance = inf };
 
         activeTrackArrayFiltered = activePlaylist.asArray.filterBPM(bpmLowBound, bpmUpBound, tempoMultiplier);
-        //activeTrackArrayFiltered = activeTrackArrayFiltered.filterKey
+        activeTrackArrayFiltered = activeTrackArrayFiltered.filterKey(referenceTrack.key, currentBpm, keyTolerance);
         activeTrackArrayFiltered = activeTrackArrayFiltered.scramble;
         count = -1;
-        if(activeTrackArrayFiltered.isEmpty){ "filtered playlist is empty".log(this) };
+        "filtered playlist containts % tracks".format(activeTrackArrayFiltered.size).log(this);
     }
 
     setReferenceTrack {

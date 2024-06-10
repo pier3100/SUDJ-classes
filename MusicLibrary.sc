@@ -154,8 +154,8 @@ MusicLibrary {
         csvFile = File.new(path, "w");
         csvFile.write("barcode; name; \n");
         for(0, (folderNames.size - 1)){ |i|
-            folder = playlists.get(folderNames[i].asSymbol);
-            folder.do({ |key, playlist|
+            folder = playlists.at("$ROOT".asSymbol, folderNames[i].asSymbol);
+            folder.do({ |playlist|
                 string = playlist.barcodeId.asString.barcodeId2EAN13(1) ++ "; " ++ folderNames[i].asString ++ ":: " ++ playlist.name ++ "; \n"; // we need to convert the barcode ID to an actual barcode
                 csvFile.write(string);
             });
@@ -280,7 +280,7 @@ Key {
                 score = this.compatibilityCircleOfFifthsMajorKeys(shiftedNote,key.rootNote);
             }{ //in this case necessarily the other key is minot
                 shiftedNote = key.rootNote + 2;
-                score = this.compatibilityCircleOfFifthsMajorKeys(shiftedNote,shiftedNote);
+                score = this.compatibilityCircleOfFifthsMajorKeys(rootNote,shiftedNote);
             }
         }
         ^score;        

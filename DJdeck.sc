@@ -107,7 +107,7 @@ DJdeck : Object {
     // frontend: tracks
     loadTrack { |newTrack, action|
         if(clock.paused){ // we only load a track if no track is allready playing
-            if(track.isNil.not){ this.reset }; // reset the deck if not done so yet
+            if(track.title.isNil.not){ this.reset }; // reset the deck if not done so yet
             track = newTrack;
             trackTempo = track.bpm/60;
             if(clock.sync.not){ clock.tempoInterface_(trackTempo) }; // play track at normal rate if not synced
@@ -129,7 +129,7 @@ DJdeck : Object {
     loadDouble { |djDeck| //not working yet
         // should double the song allready playing on the deck, this is also the way we load songs: we copy them from the prelistenDeck
         if(clock.paused){ // we only load a track if no track is allready playing
-            if(track.isNil.not){ this.reset }; // reset the deck if not done so yet
+            if(track.title.isNil.not){ this.reset }; // reset the deck if not done so yet
             djDeck.updateTrackInformation; // we first update the track description such that we have the most up to date information
             track = djDeck.track;
             trackTempo = track.bpm/60;
@@ -189,11 +189,13 @@ DJdeck : Object {
     }
 
     play {
-        if(trackBufferReady && track.isNil.not && (clock.beats < this.time2beatAdjusted(track.duration))){
-            clock.resume;
-            synth.set(\mute, 0); 
-            if(endOfTrackEvent){ this.endOfTrackSched };
-        }{"not ready".postln};
+        if(trackBufferReady && track.title.isNil.not){ // check if track is properly loaded and ready
+            if(clock.beats < this.time2beatAdjusted(track.duration)){ // check if not superseded end of treck
+                clock.resume;
+                synth.set(\mute, 0); 
+                if(endOfTrackEvent){ this.endOfTrackSched };
+            }{"can't play, because at end of track".log(this)}
+        }{"can't play, because track is not ready".log(this)};
     }
 
     playPause {
@@ -206,7 +208,7 @@ DJdeck : Object {
 
     que {
         if(clock.paused){
-            if(this.beats == quePoint){
+            if(this.clock.beats == quePoint){
                 this.playQue;
             }{
                 this.setQue;
@@ -217,6 +219,20 @@ DJdeck : Object {
 
     }
 
+    phraseQue {
+        // similar to que, but now set que point at nearest beginning of a phrase, rounded down
+        if(clock.paused){
+            if(this.clock.beats == quePoint){
+                this.playQue;
+            }{  
+                clock.beats_(clock.phrase.floor * clock.barsPerPhrase * clock.beatsPerBar);
+                this.setQue;
+            }
+        }{
+            this.jumpToQue;
+        }
+    }
+
     pitchbend_ { |intensity = 1|
         synth.set(\bendEvent, 1.0.rand, \bendIntensity, intensity);
         intensity.postln;
@@ -225,7 +241,7 @@ DJdeck : Object {
     needledropping_ { |relativePosition|
         var jumpToBeat;
         jumpToBeat = (track.duration * relativePosition * trackTempo).round;
-        clock.beats_(jumpToBeat.min(this.time2beatAdjusted(track.duration))); // should go passed the end of the track
+        clock.beats_(jumpToBeat); // should go passed the end of the track
     }
 
     needledropping {
@@ -279,7 +295,7 @@ DJdeck : Object {
     reset {
         this.update; // before removing the track we update the track description //TODO: shouldn't this be "updateTrackInformation" ?
         synth.run(false); // if we are not playing any track this synth is not active
-        track = nil;
+        track = TrackDescription.newDummy(125, 6); // placeholder;
         trackBufferReady = false;
         if(buffer.dependants.size == 1){ buffer.free }{ buffer.removeDependant(this) }; // only free the buffer if I am the only dependant; see the .schelp for more thoughts on this
     }
@@ -396,8 +412,14 @@ DJdeck : Object {
                 this.jumpToBeat(theChangerValue);
                 //theChangerValue.postln;
                 // theChanged.beats.postln;
-            }
-        }
+            };
+        };
+        if(theChanger == \sync){
+            this.changed(\sync);
+        };
+        if(theChanger == \playPause){
+            this.changed(\playPause);
+        };
     }
 
     *addSynthDef {

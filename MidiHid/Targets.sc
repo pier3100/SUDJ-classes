@@ -280,6 +280,7 @@ ContinuousLangTarget : AbstractTarget {
 
     init { |object_, methodKey_, range_, clip_|
         object = object_;
+        object.addDependant(this);
         key = methodKey_;
         range = range_??[0,1];
         clip = clip_;
@@ -347,6 +348,13 @@ ContinuousLangTarget : AbstractTarget {
         }
     }
 
+    update { |theChanged, theChanger|
+        if(theChanger == key){
+            this.makeConsistent;
+            this.changed(theChanger);
+        }
+    }
+
 } 
 
 BoolLangTarget : AbstractTarget {
@@ -358,9 +366,11 @@ BoolLangTarget : AbstractTarget {
 
     init { |object_, methodKey_|
         object = object_;
+        object.addDependant(this);
         key = methodKey_;
         if(object.respondsTo(key)){ initialValue = object.perform(key) }{ initialValue = false }; // hereby we allow for object which only have a setter method
         parameterValue = initialValue;
+        outputValue = initialValue;
     }
 
     writeOutputValue {
@@ -394,6 +404,13 @@ BoolLangTarget : AbstractTarget {
         if(objectValue != outputValue){
             parameterValue = parameterValue.not; // if the object has changed, it means it has flipped, so we flip as well
             this.updateOutputValue;
+        }
+    }
+
+    update { |theChanged, theChanger|
+        if(theChanger == key){
+            this.makeConsistent;
+            this.changed(theChanger);
         }
     }
 }

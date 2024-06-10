@@ -18,7 +18,7 @@ DONE
 
 TrackClock : TempoClock {
     // a tempo clock which allows non-positive tempi, and offers functionality for syncing clocks, can be paused, and features a bus which can be used in synths
-    classvar <>barsPerPhrase = 8;
+    var <>barsPerPhrase = 8.0;
     var <backwardClock;
     var <bus;
     var <beatOfTurning = 0;
@@ -97,6 +97,7 @@ TrackClock : TempoClock {
             paused = true;
             fallbackTempo = tempo.value; // this will be tempo we go back to once resuming playing
             this.tempo_(0);
+            this.changed(\playPause);
         }
         ^this;
     }
@@ -104,13 +105,14 @@ TrackClock : TempoClock {
     resume {
         if(paused){
             paused = false;
+            this.changed(\playPause);
             if(sync){ this.tempo_(master.tempo); this.phaseSync; }{ this.tempo_(fallbackTempo) }; // if we are synced we take the tempo from the master when resuming (instead of our tempofrom before the pause), and set the phase right
         }
     }
 
     phrase {
         // returns the current phrase
-        ^this.beats.div(barsPerPhrase);
+        ^(this.beats / (beatsPerBar * barsPerPhrase));
     }
 
     nextPhrase { |beat|
@@ -150,6 +152,7 @@ TrackClock : TempoClock {
         // the actual syncing is taken care by, by the dependancy system, which calls the update method as implemented above
         // you can tell to which master to sync, or sync to the allready set master 
         sync = true;
+        this.changed(\sync);
         master_ !? {
             if(master_ != master){ master.removeDependant(this) }; // we need to kill our ties to the old master
             master = master_; // we store it such that there is no confusion to whom we are being synced; hence we can easily desync
@@ -161,6 +164,7 @@ TrackClock : TempoClock {
 
     deactiveSync {
         sync = false;
+        this.changed(\sync);
         master.removeDependant(this);
     }
 

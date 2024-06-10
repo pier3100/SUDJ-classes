@@ -179,9 +179,7 @@ MidiHidSystemTemplate : MidiHidSystem {
     }    
 
     postInfo {
-        "\tSource: \t[%, \t%, \t%]\n".postf( source.midiCC, source.midiChannel, source.midiDevice.nameInput );
-        "\tTarget: \t%\n".postf( target.asCompileString );
-		"\tTargetOut: \t%\n".postf( targetOut.asCompileString );
+
     }
 
     remove {
@@ -230,6 +228,12 @@ MidiSystem : MidiHidSystemTemplate {
 
     remove {
         plcMidiFeedback.remove({ this.feedback });
+    }
+
+    postInfo {
+        "\tSource: \t[%, \t%, \t%]\n".postf( source.midiCC, source.midiChannel, source.midiDevice.nameInput );
+        "\tTarget: \t%\n".postf( target.asCompileString );
+		"\tTargetOut: \t%\n".postf( targetOut.asCompileString );
     }
 }
 
@@ -323,13 +327,13 @@ MidiButton : MidiSystem {
     // direct calls targetOn with value 1, and targetOff with value 0
 
     classvar <initializedMidiButton = false;
-    var <targetOn, <targetOff, <mode, dynamicTask, delay, delayedEventOccured = false;
+    var <targetOn, <targetOff, <mode, dynamicTask, delay, delayedEventOccured = false, <buttonValue;
 
-    *new { |source, targetOn, targetOff, mode = \push, delay = 0.0, active = true, targetOut|
+    *new { |source, targetOn, targetOff, mode = \push, delay = 0.0, active = true, targetOut, buttonValue = 1|
         if(([\push, \toggle, \direct].includes(mode)).not){ Error("% is not a valid mode.".format(mode)).throw }; // throw an error when the mode is not valid
         if(mode == \toggle && targetOn.respondsTo(\parameterValue).not){ Error("Toggle mode requires the target to respond to .parameterValue").throw };
         initializedMidiButton.not.if({ this.init });
-        ^super.new.init(source, targetOn, targetOff, mode, delay, active, targetOut).add;
+        ^super.new.init(source, targetOn, targetOff, mode, delay, active, targetOut, buttonValue).add;
     }
 
     *init {
@@ -337,7 +341,7 @@ MidiButton : MidiSystem {
             instanceList.do({arg item, i; // the item of Array a are a tuple, where the zeroth element is an MS (source) and the first elemenet is a SP (SynthParameter)
                 if(item.class == MidiButton){
                     if(item.source.midiChannel == chan && item.source.midiCC == cc && item.source.midiDevice.indexIn == srcID){ 
-                        item.noteOnAction;
+                        item.noteOnAction(item.buttonValue.value); // instead of passing the cc value or anything like that, we evaluate the buttonValue, which typically is just 1
                     } 
                 }
 
@@ -357,18 +361,20 @@ MidiButton : MidiSystem {
         initializedMidiButton = true;
     }
 
-    init { |source_, targetOn_, targetOff_, mode_, delay_, active_, targetOut_|
+    init { |source_, targetOn_, targetOff_, mode_, delay_, active_, targetOut_, buttonValue_|
         source = source_.asMidiSource;
         targetOn = targetOn_;
         target = targetOn; // for compability
         mode = mode_;
+        buttonValue = buttonValue_;
         if(mode == \push){ targetOff = targetOn }{
             targetOff = targetOff_; //normally 
         };
         delay = delay_;
         if(delay > 0){dynamicTask = DynamicTask.new(SystemClock, { this.noteOnBasicAction; delayedEventOccured = true })}; // in case we need to let event only occur if pressed more than delay time, we schedule it; and if needed cancel it
         active = active_;
-        source.midiDevice.midiOut !? { if(targetOut_.isNil){ if(targetOn.respondsTo(\outputValue)){ targetOut = { targetOn.outputValue }} }{ targetOut = targetOut_ } }// assign targetOut only if we are able to send it// standard assign targetOut_, if Nil, assign target.outputValue if available
+        source.midiDevice.midiOut !? { if(targetOut_.isNil){ if(targetOn.respondsTo(\outputValue)){ targetOut = { targetOn.outputValue }; targetOn.addDependant(this) } }{ targetOut = targetOut_; targetOut.addDependant(this) } };// assign targetOut only if we are able to send it// standard assign targetOut_, if Nil, assign target.outputValue if available
+        targetOut !? { this.feedback }; // make sure the midi output is initially synced to its target
     }
 
     messageMapping { |val|
@@ -384,13 +390,13 @@ MidiButton : MidiSystem {
             if(delay > 0){ // to implement that a certain amount of time needs to be pushed before the action takes place, we schedule the task and cancel it if we release it earlier
                 dynamicTask.sched(delay); // sched the normal behavior (we have determined that dynamicTask = normal behavior earlier)
             }{ 
-                this.noteOnBasicAction;
+                this.noteOnBasicAction(val);
             }
         }
     }
 
-    noteOnBasicAction {
-        targetOn.value(this.messageMapping(1)); // normal behavior; we hardcode that noteOn means value == 1
+    noteOnBasicAction { |val|
+        targetOn.value(this.messageMapping(val)); // normal behavior; we hardcode that noteOn means value == 1
         targetOut !? { this.feedback };
     }
 
@@ -405,9 +411,9 @@ MidiButton : MidiSystem {
 
     feedback {
         var message, value;
-        value = targetOut.asInteger.value;
+        value = targetOut.value.asFloat;
         if(active.value(this)){// only send the feedback when the mapping is active
-            if(value == 1){ 
+            if(value == buttonValue){ 
                 message = [source.midiChannel, source.midiCC, source.midiDevice.lightingSkin[1]];
                 source.midiDevice.midiOut.noteOn(*message);
             }{ 
@@ -420,6 +426,10 @@ MidiButton : MidiSystem {
     loadPreset { |anotherInstance|
         if(targetOn.respondsTo(\baseValue)){ targetOn.baseValue = anotherInstance.targetOn.baseValue };
         if(targetOff.responds(\baseValue) && anotherInstance.targetOff.responds(\baseValue)){ targetOff.baseValue = anotherInstance.targetOff.baseValue }; //TODO should be neater if we make sure targetOff is the same, but also we should verify more early that these are indeed Buttons
+    }
+
+    update { |theChanged, theChanger|
+        targetOut !? { this.feedback };
     }
 }
 
@@ -453,6 +463,12 @@ HidSystem : MidiHidSystemTemplate {
     }
 
     remove {
+    }
+
+    postInfo {
+        "\tSource: \t[%, \t%]\n".postf( source.elementId, source.hidDevice.info.productName );
+        "\tTarget: \t%\n".postf( target.asCompileString );
+		"\tTargetOut: \t%\n".postf( targetOut.asCompileString );
     }
 }
 

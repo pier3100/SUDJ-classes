@@ -30,6 +30,14 @@
         if(checkDigit == 10){ checkDigit = 0; };    
         ^(provisionalEan ++ "0" ++ checkDigit.asString);
     }
+
+    asHexAscii {
+        var output;
+        for(0, (this.size - 1)){ |i|
+            output = output ++ this.at(i).ascii.asHexString(2);
+        }
+        ^output;
+    }
 }
 
 + Nil {

@@ -55,7 +55,7 @@ LibraryConsole {
         activeTrackArrayFiltered = activeTrackArrayFiltered.filterKey(referenceTrack.key, currentBpm, keyTolerance);
         activeTrackArrayFiltered = activeTrackArrayFiltered.scramble;
         count = -1;
-        "filtered playlist containts % tracks".format(activeTrackArrayFiltered.size).log(this);
+        "filtered playlist contains % tracks".format(activeTrackArrayFiltered.size).log(this);
     }
 
     setReferenceTrack {

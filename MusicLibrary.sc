@@ -28,7 +28,7 @@ MusicLibrary {
                 collectionText = File.readAllString(traktorLibraryPath);
                 instance.updateTracksFromTraktor(collectionText, Date.rawSeconds(File.mtime(libraryPath)).asSortableString);
                 Library.put(\musicLibrary,instance); // should happen before loading the playlists, because the Playlist.new method lookup the tracks in the musicLibrary
-                instance.loadPlaylistsFromTraktor(collectionText); // overwrite all playlists
+                instance.loadAllPlaylists(collectionText); // overwrite all playlists
             }{
                 "Reusing existing music library, no need to update".log(this);
                 Library.put(\musicLibrary,instance); // should happen before loading the playlists, because the Playlist.new method lookup the tracks in the musicLibrary
@@ -46,7 +46,7 @@ MusicLibrary {
         instance = super.new;
         instance.loadTracksFromTraktor(collectionText);
         Library.put(\musicLibrary,instance); // should happen before loading the playlists, because the Playlist.new method lookup the tracks in the musicLibrary
-        instance.loadPlaylistsFromTraktor(collectionText);
+        instance.loadAllPlaylists(collectionText);
         ^instance;
     }
 
@@ -94,6 +94,14 @@ MusicLibrary {
         ^tracks;
     }
 
+    loadAllPlaylists { |collectionText|
+        var customPlaylistFolder;
+        this.loadPlaylistsFromTraktor(collectionText); 
+        customPlaylistFolder = IdentityDictionary.new;
+        playlists.put(\Custom, customPlaylistFolder);
+        //this.barcodeDictionary_; // we do it later after having added our custom playlists
+    }
+
     loadPlaylistsFromTraktor { |collectionText|
         //load playlists
         var playlistsText, playlistSubstring, playlistFolderSubstring, previousIndexPlaylistFolder = 0, previousIndexPlaylist;
@@ -101,13 +109,11 @@ MusicLibrary {
         playlists = MultiLevelIdentityDictionary.new;
 
         // we start by opening the root folder and then recursively iterate
-        this.loadFolder(playlistsText, 0, playlists);
-
-        this.barcodeDictionary_;
+        this.loadPlaylistFolder(playlistsText, 0, playlists);
         ^playlists;
     }
 
-    loadFolder { |playlistsText, startIndex, parentDictionary|
+    loadPlaylistFolder { |playlistsText, startIndex, parentDictionary|
         var previousIndex, thisFolder, nodeTypeSubstring, nodeType, nodeCountSubstring, nodeCount;
         previousIndex = startIndex;
         thisFolder = IdentityDictionary.new;
@@ -121,7 +127,7 @@ MusicLibrary {
             nodeType = nodeTypeSubstring.string;
 
             if(nodeType == "FOLDER"){
-                previousIndex = this.loadFolder(playlistsText, nodeTypeSubstring.endIndex, thisFolder);
+                previousIndex = this.loadPlaylistFolder(playlistsText, nodeTypeSubstring.endIndex, thisFolder);
             }{
                 if(nodeType == "PLAYLIST"){
                     var playlist, playlistSubstring;
@@ -137,6 +143,17 @@ MusicLibrary {
         };
         ^previousIndex;
 
+    }
+
+    addPseudoPlaylist { |name, folder|
+        // create and add a playlist which contains all tracks of the playlists of a single playlist folder
+        var trackList;
+        trackList = [];
+        folder.do({ |containedPlaylist|
+            trackList = trackList ++ containedPlaylist.tracksIndex;
+        });
+        trackList = trackList.asSet.asArray;
+        playlists.put("$ROOT".asSymbol, \Custom, name.asSymbol, Playlist.new(name, trackList));
     }
 
     barcodeDictionary_ {
@@ -156,7 +173,7 @@ MusicLibrary {
         for(0, (folderNames.size - 1)){ |i|
             folder = playlists.at("$ROOT".asSymbol, folderNames[i].asSymbol);
             folder.do({ |playlist|
-                string = playlist.barcodeId.asString.barcodeId2EAN13(1) ++ "; " ++ folderNames[i].asString ++ ":: " ++ playlist.name ++ "; \n"; // we need to convert the barcode ID to an actual barcode
+                string = playlist.barcodeId.asString.barcodeId2EAN13(1) ++ "; " ++ folderNames[i].asString ++ " " ++ playlist.name ++ "; \n"; // we need to convert the barcode ID to an actual barcode
                 csvFile.write(string);
             });
         };
@@ -203,8 +220,20 @@ MusicLibrary {
 Playlist {
     var <>name, <>uuId, <>barcodeId, <>tracksIndex;
 
+    
+    *new { |name, tracksIndex|
+        ^super.new.init(name, tracksIndex);
+    }
+    
     *newFromTraktor { |playlistString|
         ^super.new.initFromTraktor(playlistString);
+    }
+
+    init { |name_, tracksIndex_|
+        name = name_;
+        tracksIndex = tracksIndex_;
+        uuId = ("sudjsudj" ++ name ++ "sudjsudj").asHexAscii; // all our own custom playlists, get this prefix and postfix
+        barcodeId = this.uuId2barcodeId(uuId);
     }
 
     initFromTraktor { |playlistString|
@@ -432,7 +461,7 @@ Substring {
         if(multiplier == 0.5){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm / 2) >= lowBound) && ((item.bpm / 2) <= upBound)) }) };
         if(multiplier == 2){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm * 2) >= lowBound) && ((item.bpm * 2) <= upBound)) }) };
         //if(multiplier == 4){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm * 4) >= lowBound) && ((item.bpm * 4) <= upBound)) || (((item.bpm / 4) >= lowBound) && ((item.bpm / 4) <= upBound)) }) };
-        ^this.at(indices);
+        ^this.at(indices.asSet.asArray);
     }
 
     rand {

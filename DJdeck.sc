@@ -73,10 +73,10 @@ NOT NEEDED
 DJdeck : Object {
     var deckNr;
     var <bus, <clock, <buffer, <synth, <referenceBus, <track;
-    var trackTempo = 1, <quePoint = 0, <schedJump = false, <loop = false, beatJumpBeats = 4;
+    var trackTempo = 1, <quePoint = 0, <schedJump = false, <loop = false, beatJumpBeats = -4;
     var <trackBufferReady = false;
     var testBus, testBuffer;
-    var userInducedGridOffsetTotal = 0, <userInducedGridOffsetStatic = 0;
+    var <userInducedGridOffsetStatic = 0, <userInducedGridOffsetSetpoint = 0; // setpoint = the offset which will be induced at the coming beatjump, static = the induced offset at the latest beatjump, dynamic = mismatch between playalong and reference track due to pitchbending, actual = static + dynamic 
     var <positionSetBus, <playerSelectionBus, <pauseBus;
     var <playerSelected = false;
     var <endOfTrackEvent = true; // this makes sure that we prepare for the endOfTrack initially
@@ -111,7 +111,7 @@ DJdeck : Object {
             track = newTrack;
             trackTempo = track.bpm/60;
             if(clock.sync.not){ clock.tempoInterface_(trackTempo) }; // play track at normal rate if not synced
-            userInducedGridOffsetStatic = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
+            userInducedGridOffsetSetpoint = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
             clock.beats = this.position2beatAdjusted(0);
             // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
             buffer = track.loadBuffer(action: { trackBufferReady = true; this.reactivateSynth; action.value });
@@ -130,10 +130,9 @@ DJdeck : Object {
         // should double the song allready playing on the deck, this is also the way we load songs: we copy them from the prelistenDeck
         if(clock.paused){ // we only load a track if no track is allready playing
             if(track.title.isNil.not){ this.reset }; // reset the deck if not done so yet
-            djDeck.updateTrackInformation; // we first update the track description such that we have the most up to date information
             track = djDeck.track;
             trackTempo = track.bpm/60;
-            userInducedGridOffsetStatic = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
+            userInducedGridOffsetSetpoint = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
             if(djDeck.clock.sync){ clock.activateSync(djDeck.clock.master) }{ clock.deactiveSync; clock.tempoInterface_(djDeck.clock.tempoInterface) }; // make sure the decks are synchronized in tempo
             clock.beats = djDeck.clock.beats; // we sync the beats, because we want it to play perfectly synced
             // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
@@ -258,7 +257,7 @@ DJdeck : Object {
 
     loop_ { |bool|
         if(bool){
-            if(schedJump){
+            if(schedJump.not){
                 loop = true;
                 this.beatJump(beatJumpBeats); // if we are not allready beatjumping, we active the beatJumping; in scheduleJump we check whether we have not yet allready scheduled something
             }
@@ -268,8 +267,13 @@ DJdeck : Object {
     }
 
     loopSize_ { |direction| 
+        // TODO: change approach: work with a lookup table
         // direction should be a bool true = increase loopSize, false = decrease loopSize
-        if(direction){ beatJumpBeats = (beatJumpBeats * 2).roundFractional(128).asFloat}{ if(beatJumpBeats.abs > (1/32)){ beatJumpBeats = (beatJumpBeats / 2).roundFractional(128).asFloat} };
+        if(direction){ 
+            beatJumpBeats = (beatJumpBeats * 2).roundFractional(128).asFloat.max(-32)
+            }{ 
+                if(beatJumpBeats.abs > (1/32)){ beatJumpBeats = (beatJumpBeats / 2).roundFractional(128).asFloat.min(-1/128)} 
+            };
         if(direction && beatJumpBeats == 1.0){ clock.phaseSync }; // if we come from a loop smaller than a beat, we make sure we phasesync to the master again, now our beats line up nicely (:
     }
 
@@ -293,7 +297,7 @@ DJdeck : Object {
 
     // backend: other
     reset {
-        this.update; // before removing the track we update the track description //TODO: shouldn't this be "updateTrackInformation" ?
+        //this.update; // before removing the track we update the track description //TODO: shouldn't this be "updateTrackInformation" ?
         synth.run(false); // if we are not playing any track this synth is not active
         track = TrackDescription.newDummy(125, 6); // placeholder;
         trackBufferReady = false;
@@ -321,29 +325,33 @@ DJdeck : Object {
     }
 
     beat2positionAdjusted { |beat|
-        ^(((beat + this.userInducedGridOffset) / trackTempo) + track.gridOffset) * track.sampleRate;
+        ^(((beat + userInducedGridOffsetSetpoint) / trackTempo) + track.gridOffset) * track.sampleRate;
     }
 
     position2beatAdjusted { |position|
-        ^(((position / track.sampleRate) - track.gridOffset) * trackTempo) - this.userInducedGridOffset;
+        ^(((position / track.sampleRate) - track.gridOffset) * trackTempo) - userInducedGridOffsetSetpoint;
     }
 
     time2beatAdjusted { |time|
-        ^((time - track.gridOffset) * trackTempo) - this.userInducedGridOffset;
+        ^((time - track.gridOffset) * trackTempo) - userInducedGridOffsetSetpoint;
     }
 
     updateUserInducedGridOffsetStatic {
         // this function is only valid is you use it while doing a beatjump, because this resets the current difference between playAlong and refernce buffer playback to zero
-        userInducedGridOffsetStatic = userInducedGridOffsetTotal;
+        userInducedGridOffsetStatic = userInducedGridOffsetSetpoint;
     }
-    
-    userInducedGridOffset {
+
+    userInducedGridOffsetActual {
         // in beats; per definition: //^userInducedGridOffset = this.beatsPlayAlong - clock.beats;
         // at every beatjump we set all buffers to the same frame; when pitchbending occurs the track deck and the playalong change relative to the reference track (this is the dynamic part), when we recalculate the userInducedGridOffset, we add the current difference between play along and reference (the dynamic part) to the allready know userInducedGridOffset (the static part)
         var positionPlayAlong, positionReference, newUserInducedGridOffset;
         #positionPlayAlong, positionReference = referenceBus.getnSynchronous(2);
         newUserInducedGridOffset = this.position2beat(positionPlayAlong - positionReference);
-        ^userInducedGridOffsetTotal = userInducedGridOffsetStatic + newUserInducedGridOffset;
+        ^userInducedGridOffsetStatic + newUserInducedGridOffset;
+    }
+
+    userInducedGridOffsetSetpoint_ {
+        userInducedGridOffsetSetpoint = this.userInducedGridOffsetActual;
     }
 
     beatsReference {
@@ -376,7 +384,7 @@ DJdeck : Object {
     jumpToBeat { |beat|
         // let the clock jump to a specific beat and make sure track follows; this function is called via .update; the clock is leading
         var position;
-        this.userInducedGridOffset; // here we calculate and store the current total userInducedGridOffset
+        //this.userInducedGridOffsetSetpoint_; // here we calculate and store the current total userInducedGridOffset
         position = this.beat2positionAdjusted(beat);
         if(position >= 0){ 
             this.jumpToPosition(position);

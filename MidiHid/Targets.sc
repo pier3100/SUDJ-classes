@@ -358,6 +358,7 @@ ContinuousLangTarget : AbstractTarget {
 } 
 
 BoolLangTarget : AbstractTarget {
+    // TODO: need to change how we use output and parameter value, because now there is confusion, which leads to the play button responsding to play when at end of track; confusion arises because of the way the information flows, for midi feedback the information flows mainly from the object backward, while in order to support macromapping the information is also kept centrally in the target and an attempt is done to keep this in sync with the object // SOLUTION: we need to distinguish two types of controls LanguageFocussed and ControllerFocussed; for languaged focused controls, the feedback flows from the object back with dependency system, allowing the midi to always be in sync with object, from which ever language method it changes; for ControllerFocused the central point is the target (to be renamed TargetProxy) and it ouput value can be modulated by macromapping, the values in the target are leading, the object should only be set from the targetproxy and not from other method calls, because otherwise targetproxy and object will be out of sync
     var parameterValue, >outputValue = 0;
 
     *new { |object, methodKey|
@@ -374,7 +375,7 @@ BoolLangTarget : AbstractTarget {
     }
 
     writeOutputValue {
-        object.perform(key.asSetter,outputValue);
+        object.perform(key.asSetter, outputValue);
     }
 
     updateOutputValue {
@@ -388,12 +389,12 @@ BoolLangTarget : AbstractTarget {
     }
 
     parameterValue {
-        if(object.respondsTo(key)){ this.makeConsistent };
+        //if(object.respondsTo(key)){ this.makeConsistent };
         ^parameterValue;
     }
 
     outputValue {
-        if(object.respondsTo(key)){ this.makeConsistent };
+        //if(object.respondsTo(key)){ this.makeConsistent };
         ^outputValue;
     }
 
@@ -409,7 +410,7 @@ BoolLangTarget : AbstractTarget {
 
     update { |theChanged, theChanger|
         if(theChanger == key){
-            this.makeConsistent;
+            if(object.respondsTo(key)){ this.makeConsistent };
             this.changed(theChanger);
         }
     }

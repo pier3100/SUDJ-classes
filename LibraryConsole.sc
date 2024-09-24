@@ -3,7 +3,7 @@
 - make it possible to to have no filter */
 
 LibraryConsole {
-    var masterClock, <tempoFilter = 2, <tempoMultiplier = 1, <keyFilter = 4, <>activePlaylist, <activeTrackArrayFiltered, <>prelistenDeck, <>referenceTrack, <>count = -1;
+    var masterClock, <tempoFilter = 2, <tempoMultiplier = 1, <keyFilter = 4, <>activePlaylist, <activeTrackArrayFiltered, <>prelistenDeck, <referenceTrack, <>count = -1;
 
     *new { |prelistenDeck, masterClock|
         ^super.new.init(prelistenDeck, masterClock);
@@ -47,12 +47,13 @@ LibraryConsole {
         // the following defines the meaning of the tkeyFilter parameter
         switch(keyFilter.asInteger)
             { 1 } { keyTolerance = 0.1 }
-            { 2 } { keyTolerance = 1 }
-            { 3 } { keyTolerance = 2 }
+            { 2 } { keyTolerance = 1.1 }
+            { 3 } { keyTolerance = 2.1 }
             { 4 } { keyTolerance = inf };
 
-        activeTrackArrayFiltered = activePlaylist.asArray.filterBPM(bpmLowBound, bpmUpBound, tempoMultiplier);
-        activeTrackArrayFiltered = activeTrackArrayFiltered.filterKey(referenceTrack.key, currentBpm, keyTolerance);
+        activeTrackArrayFiltered = activePlaylist.asArray.removeNotUsable;
+        activeTrackArrayFiltered = activeTrackArrayFiltered.filterBPM(bpmLowBound, bpmUpBound, tempoMultiplier);
+        activeTrackArrayFiltered = activeTrackArrayFiltered.filterKey(referenceTrack.key.modulate(currentBpm/referenceTrack.bpm), currentBpm, keyTolerance);
         activeTrackArrayFiltered = activeTrackArrayFiltered.scramble;
         count = -1;
         "filtered playlist contains % tracks".format(activeTrackArrayFiltered.size).log(this);
@@ -80,5 +81,10 @@ LibraryConsole {
     activeTrackArray_ {
         // do nothing
         // something calls this method from somewhere, but I don't understand where; but if I delete it I run into an error
+    }
+
+    referenceTrack_ { |track|
+        referenceTrack = track;
+        this.filter;
     }
 }

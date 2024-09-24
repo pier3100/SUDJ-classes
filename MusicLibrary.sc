@@ -448,6 +448,12 @@ Substring {
         delete.do({ |item,i| this.removeAt(item-i) });
     }
 
+    removeNotUsable {
+        var delete;
+        delete = this.selectIndices({ |item, i| item.usable.not });
+        delete.do({ |item,i| this.removeAt(item-i) });
+    }
+
     filterKey { |key, bpm, tolerance|
         var indices;
         indices = this.selectIndices({ |item, i| item.key.modulate(bpm/item.bpm).compatibility(key) <= tolerance });

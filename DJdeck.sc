@@ -71,7 +71,7 @@ NOT NEEDED
 */
 
 DJdeck : Object {
-    var deckNr;
+    var <deckNr;
     var <bus, <clock, <buffer, <synth, <referenceBus, <track;
     var trackTempo = 1, <quePoint = 0, <schedJump = false, <loop = false, beatJumpBeats = -4;
     var <trackBufferReady = false;
@@ -117,8 +117,10 @@ DJdeck : Object {
             buffer = track.loadBuffer(action: { trackBufferReady = true; this.reactivateSynth; action.value });
             synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadTrack: \t"++track.artist++", "++track.title).log(this);
+            ^true;
         }{
             "track is still playing".postln;
+            ^false;
         }
     }
 
@@ -141,8 +143,10 @@ DJdeck : Object {
             this.reactivateSynth;
             synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadDouble: \t"++track.artist++", "++track.title).log(this);
+            ^true;
         }{
             "track is still playing on deck %".format(deckNr).log(this);
+            ^false;
         }
     }
 
@@ -162,6 +166,7 @@ DJdeck : Object {
     // frontend: clock
     sync_ { |bool|
         if(bool){ clock.activateSync; "engage sync on deck %".format(deckNr).log(this); }{ clock.deactiveSync; "disengage sync on deck %".format(deckNr).log(this);  };
+        this.changed(\sync);
     }
 
     sync {
@@ -241,9 +246,14 @@ DJdeck : Object {
         var jumpToBeat;
         jumpToBeat = (track.duration * relativePosition * trackTempo).round;
         clock.beats_(jumpToBeat); // should go passed the end of the track
+        this.changed(\needledropping);
     }
 
     needledropping {
+        ^this.relativePosition;
+    }
+
+    relativePosition {
         ^(clock.beats / (track.duration * trackTempo));
     }
 

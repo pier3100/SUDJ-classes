@@ -104,6 +104,10 @@ MidiHidSystem : Object {
         instanceToRemove = nil;
     }
 
+    *findByTarget { |object_, key_|
+        ^instanceList.detect({ |item| item.target.class.superclasses.includes(AbstractTarget).if{ ((item.target.object==object_)&&(item.target.key==key_)) }{ false } }); // first we check whether it is a defined target})
+    }
+
     == { |aMidiHidSystemInstance|
 		^this.compareObject(aMidiHidSystemInstance, #[\source, \target]);
 	}
@@ -171,7 +175,7 @@ MidiHidSystemTemplate : MidiHidSystem {
     resetInitial {
         //you might want to overwrite this in your subclass
         // reset the target(s); typically resetting them to the initial value (of moment of creating the mapping)
-        if(target.respondsTo(\resetInitial)){ target.resetInitial; targetOut !? { this.feedback } };
+        if(target.respondsTo(\resetInitialValue)){ target.resetInitialValue; targetOut !? { this.feedback } };
     }
 
     *resetLibraries {
@@ -212,7 +216,7 @@ MidiSystem : MidiHidSystemTemplate {
         MIDIClient.initialized.not.if{ MIDIClient.init };
         MIDIIn.connectAll;
         
-        plcMidiFeedback = PLC.new(midiFeedbackFreq, active: { enabled });
+        plcMidiFeedback = PLC.new(midiFeedbackFreq);
         
         initializedMidi = true;
     }
@@ -223,7 +227,6 @@ MidiSystem : MidiHidSystemTemplate {
 
     add {
         instanceList.add(this);
-        targetOut !? { plcMidiFeedback.add({ this.feedback }) }; //for midi feedback
     }
 
     remove {
@@ -243,7 +246,7 @@ MidiCC : MidiSystem {
 
     *new { |source, target, mode = \relative, sensitivity = 1, acceleration = 0, constrained = true, active = true, targetOut|
         initializedMidiCC.not.if({ this.init });
-        if(([\absolute, \relative, \forwardBackwardButton].includes(mode)).not){ Error("% is not a valid mode.".format(mode)).throw }; // throw an error when the mode is not valid
+        if(([\absolute, \relative, \forwardBackwardButton, \plcFeedbackOnly].includes(mode)).not){ Error("% is not a valid mode.".format(mode)).throw }; // throw an error when the mode is not valid
         if(mode == \relative && target.respondsTo(\parameterValue).not){ Error("For the supplied target the method parameterValue has no implementation, hence we cannot handle relative mode").throw }; // if currentParameterValue is not implemented there is no way to handle a relative controller
         ^super.new.init(source, target, mode, sensitivity, acceleration, constrained, active, targetOut);
     }
@@ -272,6 +275,8 @@ MidiCC : MidiSystem {
         active = active_;
         source.midiDevice.midiOut !? { if(targetOut_.isNil){ if(target.respondsTo(\outputValue)){ targetOut = { target.outputValue }} }{ targetOut = targetOut_ } };// assign targetOut only if we are able to send it// standard assign targetOut_, if Nil, assign target.outputValue if available
         this.add;
+        if(mode == \plcFeedbackOnly){ plcMidiFeedback.add({ this.feedback }) }; 
+        targetOut !? { this.feedback }; // make sure the midi output is initially synced to its target
     }
 
     onInput { |val|
@@ -295,7 +300,7 @@ MidiCC : MidiSystem {
                 currentValue = target.parameterValue;
                 if(val>60){ increment = (val - 128) / 128}{ increment = val / 128 };//definition of relative behavior
                 value = currentValue + (modifiedSensitivity * increment);
-                //if(constrained){ value = value.clip(0,1) };
+                if(constrained){ value = value.clip(0,1) }; // this was previously commented away, not sure why, returned to operation on 27-11-24
         }};
         ^value;
     }
@@ -412,7 +417,7 @@ MidiButton : MidiSystem {
     feedback {
         var message, value;
         value = targetOut.value.asFloat;
-        if(active.value(this)){// only send the feedback when the mapping is active
+        //if(active.value(this)){// only send the feedback when the mapping is active, zie Onenote, supercollider, macrostructuur 2024-12-02
             if(value == buttonValue){ 
                 message = [source.midiChannel, source.midiCC, source.midiDevice.lightingSkin[1]];
                 source.midiDevice.midiOut.noteOn(*message);
@@ -420,7 +425,7 @@ MidiButton : MidiSystem {
                 message = [source.midiChannel, source.midiCC, source.midiDevice.lightingSkin[0]];
                 source.midiDevice.midiOut.noteOn(*message);
             };
-        };
+        //};
     }
 
     loadPreset { |anotherInstance|

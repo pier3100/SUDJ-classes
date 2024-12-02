@@ -357,8 +357,49 @@ ContinuousLangTarget : AbstractTarget {
 
 } 
 
-BoolLangTarget : AbstractTarget {
+BoolLangLangTarget : AbstractTarget {
     // TODO: need to change how we use output and parameter value, because now there is confusion, which leads to the play button responsding to play when at end of track; confusion arises because of the way the information flows, for midi feedback the information flows mainly from the object backward, while in order to support macromapping the information is also kept centrally in the target and an attempt is done to keep this in sync with the object // SOLUTION: we need to distinguish two types of controls LanguageFocussed and ControllerFocussed; for languaged focused controls, the feedback flows from the object back with dependency system, allowing the midi to always be in sync with object, from which ever language method it changes; for ControllerFocused the central point is the target (to be renamed TargetProxy) and it ouput value can be modulated by macromapping, the values in the target are leading, the object should only be set from the targetproxy and not from other method calls, because otherwise targetproxy and object will be out of sync
+    // this can be modified from language side; the button is a slave of the language; hence a requirement is that the object is accesibble, i.e. we can evaluate the get method (and not only the set method)
+
+    *new { |object, methodKey|
+        ^super.new.init(object,methodKey);
+    }
+
+    init { |object_, methodKey_|
+        object = object_;
+        object.addDependant(this);
+        key = methodKey_;
+        initialValue = object.perform(key);
+    }
+
+    parameterValue_ { |val|
+        object.perform(key.asSetter, val);
+        //to be implemented in subclass
+        //should set the value of the object
+    }
+
+    outputValue {
+        ^object.perform(key);
+        //to be implemented in subclass
+        //this is called for (midi) feedback
+    }    
+
+    parameterValue {
+        ^object.perform(key);
+        //to be implemented in subclass
+        //this is called for midicontrollers in relative mode       
+    }
+
+    update { |theChanged, theChanger|
+        if(theChanger == key){
+            this.changed(theChanger);
+        }
+    }
+}
+
+BoolLangControllerTarget : AbstractTarget {
+    // TODO: need to change how we use output and parameter value, because now there is confusion, which leads to the play button responsding to play when at end of track; confusion arises because of the way the information flows, for midi feedback the information flows mainly from the object backward, while in order to support macromapping the information is also kept centrally in the target and an attempt is done to keep this in sync with the object // SOLUTION: we need to distinguish two types of controls LanguageFocussed and ControllerFocussed; for languaged focused controls, the feedback flows from the object back with dependency system, allowing the midi to always be in sync with object, from which ever language method it changes; for ControllerFocused the central point is the target (to be renamed TargetProxy) and it ouput value can be modulated by macromapping, the values in the target are leading, the object should only be set from the targetproxy and not from other method calls, because otherwise targetproxy and object will be out of sync
+    // this cannot be changed from the language side, but can be macromapped
     var parameterValue, >outputValue = 0;
 
     *new { |object, methodKey|
@@ -405,13 +446,6 @@ BoolLangTarget : AbstractTarget {
         if(objectValue != outputValue){
             parameterValue = parameterValue.not; // if the object has changed, it means it has flipped, so we flip as well
             this.updateOutputValue;
-        }
-    }
-
-    update { |theChanged, theChanger|
-        if(theChanger == key){
-            if(object.respondsTo(key)){ this.makeConsistent };
-            this.changed(theChanger);
         }
     }
 }

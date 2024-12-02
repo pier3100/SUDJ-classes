@@ -288,7 +288,7 @@ Key {
     }
 
     initFromTraktor { |keyNumber|
-        if(keyNumber>=12){ scale = Scale.major; rootNote = keyNumber - 12 }{ scale = Scale.minor; rootNote = keyNumber };
+        if(keyNumber>=12){ scale = Scale.minor; rootNote = keyNumber - 12 }{ scale = Scale.major; rootNote = keyNumber };
     }
 
     modulate { |ratio|
@@ -305,10 +305,10 @@ Key {
         }{
             var shiftedNote;
             if(scale==Scale.minor){
-                shiftedNote = rootNote + 2; // for the minor scale we add + 2, now we can compare the keys as if they were both major, according to the circle of fifths
+                shiftedNote = (rootNote + 3).mod(12); // for the minor scale we add + 2, now we can compare the keys as if they were both major, according to the circle of fifths
                 score = this.compatibilityCircleOfFifthsMajorKeys(shiftedNote,key.rootNote);
-            }{ //in this case necessarily the other key is minot
-                shiftedNote = key.rootNote + 2;
+            }{ //in this case necessarily the other key is minor
+                shiftedNote = (key.rootNote + 3).mod(12);
                 score = this.compatibilityCircleOfFifthsMajorKeys(rootNote,shiftedNote);
             }
         }
@@ -317,11 +317,23 @@ Key {
 
     compatibilityCircleOfFifthsMajorKeys { |rootNoteA, rootNoteB|
         // only makes sense if both keys are major
-        var noteDif, fifthScore, penalty, finalScore;
-        noteDif = rootNoteA.moddif(rootNoteB,12);
-        fifthScore = noteDif.round.modSolve(5,12); // it outputs the distance along the circle of fifths
-        penalty = 2 * (noteDif.floor - noteDif).abs * (noteDif.ceil - noteDif).abs * 5; // we interpolate the penalty which you get wrt bigger key and smaller key differnce; a penalty from deviating of being perfect; where the multiplier of 5 is chosen such that for notes next to each other you get a score of 5, which makes sense because in the circle of fiths that's also there distance
+        var noteDif, noteDifRound, fifthScore, penalty, finalScore;
+        noteDif = rootNoteA.moddif(rootNoteB, 12);
+        noteDifRound = noteDif.round;
+        fifthScore = this.fifthDistance(noteDif); // it outputs the distance along the circle of fifths (a fifth is 7 semitones apart)
+        //penalty = 2 * (noteDif.floor - noteDif).abs * (noteDif.ceil - noteDif).abs * 5; // we interpolate the penalty which you get wrt bigger key and smaller key differnce; a penalty from deviating of being perfect; where the multiplier of 5 is chosen such that for notes next to each other you get a score of 5, which makes sense because in the circle of fiths that's also there distance
+        if(noteDif >= noteDifRound){ penalty = noteDif.frac }{ penalty = 1 - noteDif.frac }; // we asign as penalty the linear difference between the rootNote pitches; since we can not really interpret the meaning if the penalty, it doesnt really matter much how we calculate it; it should just resemble how much we deviate from perfect fifths
         ^finalScore = fifthScore + penalty;
+    }
+
+    fifthDistance { |semiToneDistance| 
+        ^semiToneDistance.round.modSolve(7,12).abs;
+    }
+
+    fifthScore { |semiToneDistance| 
+        var semiToneDistanceAugmented;
+        if(scale==Scale.minor){ semiToneDistanceAugmented = (semiToneDistance + 3).mod(12) }{ semiToneDistanceAugmented = semiToneDistance };
+        ^1 + semiToneDistanceAugmented.round.modSolveP(7,12);
     }
 }
 
@@ -386,6 +398,13 @@ TrackDescription : SoundFile {
 
     keyAtBPM { |playBPM|
         ^key.switched(playBPM/bpm);
+    }
+
+    postInfo {
+        "\tTitle: \t%\n".postf( this.title );
+        "\tArtist: \t%\n".postf( this.artist );
+        "\tBPM: \t%\n".postf( this.bpm );
+        "\tKey: \t% % \tFifthScore: \t%\n".postf( this.key.rootNote, this.key.scale.name, this.key.fifthScore(this.key.rootNote) );
     }
 
 }
@@ -454,10 +473,25 @@ Substring {
         delete.do({ |item,i| this.removeAt(item-i) });
     }
 
-    filterKey { |key, bpm, tolerance|
-        var indices;
-        indices = this.selectIndices({ |item, i| item.key.modulate(bpm/item.bpm).compatibility(key) <= tolerance });
-        ^this.at(indices);
+    filterKey { |key, bpm, distanceLow, distanceHigh, minorMajor|
+        // filters the track array with respect to a reference key, whereby both the reference track and toBeFiltered tracks are repitched to the same bpm; only output tracks whose keyDistance is in between the distance tresholds
+        var indices, minorMajorFiltered;
+        minorMajorFiltered = this;
+        // filter based on minorMajor
+        if(minorMajor == "major"){
+            indices = this.selectIndices({ |item, i| item.key.scale == Scale.major });
+            minorMajorFiltered = this.at(indices);
+        };
+        if(minorMajor == "minor"){
+            indices = this.selectIndices({ |item, i| item.key.scale == Scale.minor });
+            minorMajorFiltered = this.at(indices);
+        };
+        // filter based on circle of fifth distance
+        indices = minorMajorFiltered.selectIndices({ |item, i| 
+            var keyDistance;
+            keyDistance = item.key.modulate(bpm/item.bpm).compatibility(key);
+            (keyDistance >= distanceLow) && (keyDistance <= distanceHigh) });
+        ^minorMajorFiltered.at(indices);
     }
 
     filterBPM { |lowBound, upBound, multiplier = 1|
@@ -477,7 +511,7 @@ Substring {
 
 + SimpleNumber {
     modSolve { |step, mod, aBound|
-        // solve k*step = receiver (mod mod), for smallest k
+        // solve k*step = receiver (mod mod), for k, s.th. abs(k) is smallest
         // can be used to find the distance of keys along the circle of fifths
         var bound, k = 0, solved = false, multiplier, output;
         bound = aBound ?? step * mod;
@@ -492,10 +526,30 @@ Substring {
                 multiplier = (this - (k.neg * step)) / mod;
                 if(multiplier.isInteger){
                     solved = true;
-                    output = k;
+                    output = k.neg;
                 }{  // otherwise we increment k and continue
                     k = k + 1;
                 }   
+            }
+        }
+        ^output;
+    }
+
+        modSolveP { |step, mod, aBound|
+        // solve k*step = receiver (mod mod), for k, s.th. abs(k) is smallest
+        // can be used to find the score of keys along the circle of fifths
+        // we only ascend, P for Positive
+        var bound, k = 0, solved = false, multiplier, output;
+        bound = aBound ?? step * mod;
+        bound = bound.asInteger;
+        while{ (k < bound) && (solved == false) }{
+            // we solve k*step + multiplier*mod = receiver, whereby multiplier needs to be integer
+            multiplier = (this - (k * step)) / mod;
+            if(multiplier.isInteger){
+                solved = true;
+                output = k;
+            }{ // otherwise we increment k and continue
+                    k = k + 1; 
             }
         }
         ^output;

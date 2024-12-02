@@ -3,7 +3,7 @@
 - make it possible to to have no filter */
 
 LibraryConsole {
-    var masterClock, <tempoFilter = 2, <tempoMultiplier = 1, <keyFilter = 4, <>activePlaylist, <activeTrackArrayFiltered, <>prelistenDeck, <referenceTrack, <>count = -1;
+    var masterClock, <tempoFilter = 2, <tempoMultiplier = 1, <keyFilter = 4, <minorMajorFilterCoefficient = 2, <>activePlaylist, <activeTrackArrayFiltered, <>prelistenDeck, <referenceTrack, <>count = -1;
 
     *new { |prelistenDeck, masterClock|
         ^super.new.init(prelistenDeck, masterClock);
@@ -33,8 +33,14 @@ LibraryConsole {
         this.filter;
     }
 
+    minorMajorFilterCoefficient_ { |val|
+        minorMajorFilterCoefficient = val;
+        this.changed(\minorMajorFilterCoefficient);
+        this.filter;
+    }
+
     filter {
-        var bpmLowBound, bpmUpBound, bpmMultiplier, currentBpm, keyTolerance;
+        var bpmLowBound, bpmUpBound, bpmMultiplier, currentBpm, keyToleranceDistanceLow, keyToleranceDistanceHigh, minorMajorFilter;
         currentBpm = masterClock.tempo * 60;
         // the following defines the meaning of the tempoFilter parameter
         switch(tempoFilter.asInteger)
@@ -44,16 +50,21 @@ LibraryConsole {
             { 4 } { bpmLowBound = currentBpm; bpmUpBound = currentBpm + 10}
             { 5 } { bpmLowBound = currentBpm; bpmUpBound = inf};
 
-        // the following defines the meaning of the tkeyFilter parameter
+        // the following defines the meaning of the keyFilter parameter
         switch(keyFilter.asInteger)
-            { 1 } { keyTolerance = 0.1 }
-            { 2 } { keyTolerance = 1.1 }
-            { 3 } { keyTolerance = 2.1 }
-            { 4 } { keyTolerance = inf };
+            { 1 } { keyToleranceDistanceLow = 0; keyToleranceDistanceHigh = 0.1 }
+            { 2 } { keyToleranceDistanceLow = 1; keyToleranceDistanceHigh = 1.1 }
+            { 3 } { keyToleranceDistanceLow = 0; keyToleranceDistanceHigh = 2.1 }
+            { 4 } { keyToleranceDistanceLow = 0; keyToleranceDistanceHigh = inf };
+
+        switch(minorMajorFilterCoefficient.asInteger)
+            { 1 } { minorMajorFilter = "minor" }
+            { 2 } { minorMajorFilter = nil }
+            { 3 } { minorMajorFilter = "major" };
 
         activeTrackArrayFiltered = activePlaylist.asArray.removeNotUsable;
         activeTrackArrayFiltered = activeTrackArrayFiltered.filterBPM(bpmLowBound, bpmUpBound, tempoMultiplier);
-        activeTrackArrayFiltered = activeTrackArrayFiltered.filterKey(referenceTrack.key.modulate(currentBpm/referenceTrack.bpm), currentBpm, keyTolerance);
+        activeTrackArrayFiltered = activeTrackArrayFiltered.filterKey(referenceTrack.key.modulate(currentBpm/referenceTrack.bpm), currentBpm, keyToleranceDistanceLow, keyToleranceDistanceHigh, minorMajorFilter);
         activeTrackArrayFiltered = activeTrackArrayFiltered.scramble;
         count = -1;
         "filtered playlist contains % tracks".format(activeTrackArrayFiltered.size).log(this);

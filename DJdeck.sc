@@ -73,7 +73,7 @@ NOT NEEDED
 DJdeck : Object {
     var <deckNr;
     var <bus, <clock, <buffer, <synth, <referenceBus, <track;
-    var trackTempo = 1, <quePoint = 0, <schedJump = false, <loop = false, beatJumpBeats = -4;
+    var trackTempo = 1, <quePoint = 0, <schedJump = false, <loop = false, beatJumpBeats = -4, loopTable, <loopTableIndex = 9;
     var <trackBufferReady = false;
     var testBus, testBuffer;
     var <userInducedGridOffsetStatic = 0, <userInducedGridOffsetSetpoint = 0; // setpoint = the offset which will be induced at the coming beatjump, static = the induced offset at the latest beatjump, dynamic = mismatch between playalong and reference track due to pitchbending, actual = static + dynamic 
@@ -102,6 +102,7 @@ DJdeck : Object {
         buffer = Buffer.loadCollection(Server.default,[0, 0, 0, 0], 2, action: {this.spawnSynths(target, addAction)} ); // use .loadCollection instead of .alloc because it allows to supply an action function; after the buffer is setup, we create the synth
         // ideally I would free the buffer here, but then the buffer will be free before the synth is created
         track = TrackDescription.newDummy(125, 6); // placeholder
+        loopTable = [1/128.neg, 1/64.neg, 1/32.neg, 1/16.neg, 1/8.neg, 1/4.neg, 1/2.neg, 1.neg, 2.neg, 4.neg, 8.neg, 16.neg, 32.neg];
     }
 
     // frontend: tracks
@@ -124,10 +125,6 @@ DJdeck : Object {
         }
     }
 
-    loadAndPlayTrack { |newTrack|
-        this.loadTrack(newTrack, { this.play } );
-    }
-
     loadDouble { |djDeck| //not working yet
         // should double the song allready playing on the deck, this is also the way we load songs: we copy them from the prelistenDeck
         if(clock.paused){ // we only load a track if no track is allready playing
@@ -148,6 +145,29 @@ DJdeck : Object {
             "track is still playing on deck %".format(deckNr).log(this);
             ^false;
         }
+    }    
+
+    loadTrackFromBuffer{ |newTrack, newBuffer|
+        if(clock.paused){ // we only load a track if no track is allready playing
+            if(track.title.isNil.not){ this.reset }; // reset the deck if not done so yet
+            track = newTrack;
+            trackTempo = track.bpm/60;
+            if(clock.sync.not){ clock.tempoInterface_(trackTempo) }; // play track at normal rate if not synced
+            userInducedGridOffsetSetpoint = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
+            clock.beats = this.position2beatAdjusted(0);
+            // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
+            buffer = newBuffer;
+            synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
+            (deckNr.asString++", loadTrack: \t"++track.artist++", "++track.title).log(this);
+            ^true;
+        }{
+            "track is still playing on deck %".format(deckNr).log(this);
+            ^false;
+        }
+    }
+    
+    loadAndPlayTrack { |newTrack|
+        this.loadTrack(newTrack, { this.play } );
     }
 
     loadAndPlayDouble { |newTrack|
@@ -195,6 +215,7 @@ DJdeck : Object {
     play {
         if(trackBufferReady && track.title.isNil.not){ // check if track is properly loaded and ready
             if(clock.beats < this.time2beatAdjusted(track.duration)){ // check if not superseded end of treck
+                if(clock.sync){ clock.phaseSync };
                 clock.resume;
                 synth.set(\mute, 0); 
                 if(endOfTrackEvent){ this.endOfTrackSched };
@@ -259,9 +280,10 @@ DJdeck : Object {
 
     beatJump { |beats, quant|
         var func, q, jumpAtBeat, goTo;
-        q = quant ? beats.abs; 
+        if(beats.isNil.not){ beatJumpBeats = beats };
+        q = quant ? beatJumpBeats.abs; 
         jumpAtBeat = q*(clock.beats/q).ceil;
-        beatJumpBeats = beats.asInteger; // will be looked up at moment of jump by schedule jump (can be changed in the meantime)
+        //beatJumpBeats = beats.asInteger; // will be looked up at moment of jump by schedule jump (can be changed in the meantime)
         this.scheduleJump(jumpAtBeat);
     }
 
@@ -269,22 +291,20 @@ DJdeck : Object {
         if(bool){
             if(schedJump.not){
                 loop = true;
-                this.beatJump(beatJumpBeats); // if we are not allready beatjumping, we active the beatJumping; in scheduleJump we check whether we have not yet allready scheduled something
-            }
+                this.beatJump; // if we are not allready beatjumping, we active the beatJumping; in scheduleJump we check whether we have not yet allready scheduled something
+            };
         }{
             loop = false;
-        }
+        };
+        this.changed(\loop);
     }
 
-    loopSize_ { |direction| 
+    loopTableIndex_ { |val| 
         // TODO: change approach: work with a lookup table
         // direction should be a bool true = increase loopSize, false = decrease loopSize
-        if(direction){ 
-            beatJumpBeats = (beatJumpBeats * 2).roundFractional(128).asFloat.max(-32)
-            }{ 
-                if(beatJumpBeats.abs > (1/32)){ beatJumpBeats = (beatJumpBeats / 2).roundFractional(128).asFloat.min(-1/128)} 
-            };
-        if(direction && beatJumpBeats == 1.0){ clock.phaseSync }; // if we come from a loop smaller than a beat, we make sure we phasesync to the master again, now our beats line up nicely (:
+        loopTableIndex = val.clip(0,loopTable.size-1);
+        beatJumpBeats = loopTable[loopTableIndex];
+        if(beatJumpBeats == 1.0){ clock.phaseSync }; // if we come from a loop smaller than a beat, we make sure we phasesync to the master again, now our beats line up nicely (:
     }
 
     loopSize {
@@ -312,6 +332,8 @@ DJdeck : Object {
         track = TrackDescription.newDummy(125, 6); // placeholder;
         trackBufferReady = false;
         if(buffer.dependants.size == 1){ buffer.free }{ buffer.removeDependant(this) }; // only free the buffer if I am the only dependant; see the .schelp for more thoughts on this
+        this.loop_(false);
+        this.loopTableIndex_(9);
     }
 
     updateTrackInformation {

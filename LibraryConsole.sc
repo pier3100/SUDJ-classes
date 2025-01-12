@@ -3,7 +3,10 @@
 - make it possible to to have no filter */
 
 LibraryConsole {
-    var masterClock, <tempoFilter = 2, <tempoMultiplier = 1, <keyFilter = 4, <minorMajorFilterCoefficient = 2, <>activePlaylist, <activeTrackArrayFiltered, <>prelistenDeck, <referenceTrack, <>count = -1;
+    var masterClock;
+    var <tempoFilter = 2, <tempoMultiplier = 1, <keyFilter = 4, <minorMajorFilterCoefficient = 2;
+    var <>activePlaylist, <activeTrackArrayFiltered, <>prelistenDeck, <referenceTrack, <>count = -1;
+    var <bufferArray; 
 
     *new { |prelistenDeck, masterClock|
         ^super.new.init(prelistenDeck, masterClock);
@@ -13,30 +16,35 @@ LibraryConsole {
         prelistenDeck = prelistenDeck_;
         masterClock = masterClock_;
         referenceTrack = TrackDescription.newDummy(125, 6);
+        bufferArray = Array.fill(5, {Buffer.alloc(Server.default, Server.default.sampleRate * 200, 2)});
     }
 
     tempoFilter_ { |val|
         tempoFilter = val;
         this.changed(\tempoFilter);
         this.filter;
+        this.installPlaylist;
     }
 
     tempoMultiplier_ { |val|
         tempoMultiplier = val;
         this.changed(\tempoMultiplier);
         this.filter;
+        this.installPlaylist;
     }
 
     keyFilter_ { |val|
         keyFilter = val;
         this.changed(\keyFilter);
         this.filter;
+        this.installPlaylist;
     }
 
     minorMajorFilterCoefficient_ { |val|
         minorMajorFilterCoefficient = val;
         this.changed(\minorMajorFilterCoefficient);
         this.filter;
+        this.installPlaylist;
     }
 
     filter {
@@ -65,28 +73,74 @@ LibraryConsole {
         activeTrackArrayFiltered = activePlaylist.asArray.removeNotUsable;
         activeTrackArrayFiltered = activeTrackArrayFiltered.filterBPM(bpmLowBound, bpmUpBound, tempoMultiplier);
         activeTrackArrayFiltered = activeTrackArrayFiltered.filterKey(referenceTrack.key.modulate(currentBpm/referenceTrack.bpm), currentBpm, keyToleranceDistanceLow, keyToleranceDistanceHigh, minorMajorFilter);
-        activeTrackArrayFiltered = activeTrackArrayFiltered.scramble;
-        count = -1;
-        "filtered playlist contains % tracks".format(activeTrackArrayFiltered.size).log(this);
+    }
+
+    numberOfTracks {
+        ^activeTrackArrayFiltered.size;
     }
 
     setReferenceTrack {
         referenceTrack = prelistenDeck.track;
     }
 
-    nextTrack_ { |direction = true|
+    oldnextTrack_ { |direction = true|
         var increment;
         if(activeTrackArrayFiltered.isEmpty.not){
-            if(direction){ increment = 1 }{ increment = -1};
+            if(direction){ 
+                increment = 1 
+            }{ 
+                increment = -1
+            };
             count = (count + increment).clip(0, activeTrackArrayFiltered.size - 1);
             ^prelistenDeck.loadTrack(activeTrackArrayFiltered[count]);
         }
+    }
 
+    nextTrack_ { |direction = true|
+        var tempCount;
+        if(activeTrackArrayFiltered.isEmpty.not){
+            if(direction){ 
+                tempCount = count + 1;
+                if(tempCount <= (activeTrackArrayFiltered.size - 1)){
+                    // we restrict our selves to the size of the array
+                    count = tempCount;
+                    for(0,3){ |i|
+                        bufferArray[i] = bufferArray[i + 1];
+                    };
+                    bufferArray[4] = activeTrackArrayFiltered[count + 2];
+                }
+            }{ 
+                tempCount = count - 1;
+                if(tempCount >= 0){
+                    // we restrict our selves to the size of the array
+                    count = tempCount;
+                    for(4,1){ |i|
+                        bufferArray[i] = bufferArray[i - 1];
+                    };
+                    bufferArray[0] = activeTrackArrayFiltered[count - 2];
+                }
+            };
+            ^prelistenDeck.loadTrackFromBuffer(activeTrackArrayFiltered[count], bufferArray[2]);
+        }
+    }
+
+    installPlaylist {
+        activeTrackArrayFiltered = activeTrackArrayFiltered.scramble;
+        count = -1;
+        "filtered playlist contains % tracks".format(activeTrackArrayFiltered.size).log(this);
+        if(activeTrackArrayFiltered.isEmpty.not){
+            // we initialize the buffer array for this playlist, we keep the first three empty, because these are use for the previous tracks, and we fill the third one upon calling the first nextTrack, so we only fill spot 3,4
+            for(3, 1 + activeTrackArrayFiltered.size.min(2)){ |i|
+                bufferArray[i] = activeTrackArrayFiltered[i].loadBuffer; 
+            };
+        };
+        this.changed(\numberOfTracks);
     }
 
     loadPlaylist { |playlist|
         activePlaylist = playlist;
         this.filter;
+        this.installPlaylist;
     }
 
     activeTrackArray_ {
@@ -97,5 +151,6 @@ LibraryConsole {
     referenceTrack_ { |track|
         referenceTrack = track;
         this.filter;
+        this.installPlaylist;
     }
 }

@@ -242,13 +242,13 @@ MidiSystem : MidiHidSystemTemplate {
 
 MidiCC : MidiSystem {
     classvar <initializedMidiCC = false;
-    var <mode, <sensitivity, <acceleration, constrained, time;
+    var <mode, <feedbackMode = true, <sensitivity, <acceleration, constrained, time;
 
-    *new { |source, target, mode = \relative, sensitivity = 1, acceleration = 0, constrained = true, active = true, targetOut|
+    *new { |source, target, mode = \relative, feedbackMode = true, sensitivity = 1, acceleration = 0, constrained = true, active = true, targetOut|
         initializedMidiCC.not.if({ this.init });
-        if(([\absolute, \relative, \forwardBackwardButton, \plcFeedbackOnly].includes(mode)).not){ Error("% is not a valid mode.".format(mode)).throw }; // throw an error when the mode is not valid
+        if(([\absolute, \relative, \relativeRound, \forwardBackwardButton, \plcFeedbackOnly].includes(mode)).not){ Error("% is not a valid mode.".format(mode)).throw }; // throw an error when the mode is not valid
         if(mode == \relative && target.respondsTo(\parameterValue).not){ Error("For the supplied target the method parameterValue has no implementation, hence we cannot handle relative mode").throw }; // if currentParameterValue is not implemented there is no way to handle a relative controller
-        ^super.new.init(source, target, mode, sensitivity, acceleration, constrained, active, targetOut);
+        ^super.new.init(source, target, mode, feedbackMode, sensitivity, acceleration, constrained, active, targetOut);
     }
 
     *init {        
@@ -264,10 +264,11 @@ MidiCC : MidiSystem {
         initializedMidiCC = true;
     }
 
-    init { |source_, target_, mode_, sensitivity_, acceleration_, constrained_, active_, targetOut_|
+    init { |source_, target_, mode_, feedbackMode_, sensitivity_, acceleration_, constrained_, active_, targetOut_|
         source = source_.asMidiSource;
         target = target_;
         mode = mode_;
+        feedbackMode = feedbackMode_;
         sensitivity = sensitivity_; //so an input value of 1, is normal sensitivity
         acceleration = acceleration_;
         constrained = constrained_;
@@ -296,11 +297,18 @@ MidiCC : MidiSystem {
             if(mode==\forwardBackwardButton){ // to be used for encoders mapping to pitchbending
                 if(val>60){ increment = val - 128}{ increment = val };//definition of relative behavior; XoneDX encoder go from 1 to 5 for clockwise turning slow to fast; and fo from 127 to 122 for anti clockwise slow to fast
                 value = modifiedSensitivity * increment * (1 + this.accelerate(time.timeDifference,modifiedSensitivity));
-            }{  //we can assume mode is relative, because we checked it earlier on
-                currentValue = target.parameterValue;
-                if(val>60){ increment = (val - 128) / 128}{ increment = val / 128 };//definition of relative behavior
-                value = currentValue + (modifiedSensitivity * increment);
-                if(constrained){ value = value.clip(0,1) }; // this was previously commented away, not sure why, returned to operation on 27-11-24
+            }{  
+                if(mode==\relativeRound){
+                    currentValue = target.parameterValue;
+                    if(val>60){ increment = -1}{ increment = 1 };//definition of relative behavior
+                    value = (currentValue + increment).asInteger;
+                }{
+                    //we can assume mode is relative, because we checked it earlier on
+                    currentValue = target.parameterValue;
+                    if(val>60){ increment = (val - 128) / 128}{ increment = val / 128 };//definition of relative behavior
+                    value = currentValue + (modifiedSensitivity * increment);
+                    //if(constrained){ value = value.clip(0,1) }; // this was previously commented away, not sure why, returned to operation on 27-11-24 EDIT (03-12) it was commented away because the clipping is done at the target
+                }
         }};
         ^value;
     }
@@ -315,8 +323,10 @@ MidiCC : MidiSystem {
 
     feedback {
         var message;
-        message = this.prepareFeedbackMessage;
-        if(active.value(this)){ source.midiDevice.midiOut.control(*message) }; // only send the feedback when the mapping is active
+        if(feedbackMode){
+            message = this.prepareFeedbackMessage;
+            if(active.value(this)){ source.midiDevice.midiOut.control(*message) }; // only send the feedback when the mapping is active
+        }
     }
 
     prepareFeedbackMessage {
@@ -332,13 +342,13 @@ MidiButton : MidiSystem {
     // direct calls targetOn with value 1, and targetOff with value 0
 
     classvar <initializedMidiButton = false;
-    var <targetOn, <targetOff, <mode, dynamicTask, delay, delayedEventOccured = false, <buttonValue;
+    var <targetOn, <targetOff, <mode, <feedbackMode = true, dynamicTask, delay, delayedEventOccured = false, <buttonValue;
 
-    *new { |source, targetOn, targetOff, mode = \push, delay = 0.0, active = true, targetOut, buttonValue = 1|
-        if(([\push, \toggle, \direct].includes(mode)).not){ Error("% is not a valid mode.".format(mode)).throw }; // throw an error when the mode is not valid
+    *new { |source, targetOn, targetOff, mode = \push, feedbackMode = true, delay = 0.0, active = true, targetOut, buttonValue = 1|
+        if(([\push, \toggle, \direct, \feedbackOnly, \plcFeedbackOnly].includes(mode)).not){ Error("% is not a valid mode.".format(mode)).throw }; // throw an error when the mode is not valid
         if(mode == \toggle && targetOn.respondsTo(\parameterValue).not){ Error("Toggle mode requires the target to respond to .parameterValue").throw };
         initializedMidiButton.not.if({ this.init });
-        ^super.new.init(source, targetOn, targetOff, mode, delay, active, targetOut, buttonValue).add;
+        ^super.new.init(source, targetOn, targetOff, mode, feedbackMode, delay, active, targetOut, buttonValue).add;
     }
 
     *init {
@@ -366,11 +376,12 @@ MidiButton : MidiSystem {
         initializedMidiButton = true;
     }
 
-    init { |source_, targetOn_, targetOff_, mode_, delay_, active_, targetOut_, buttonValue_|
+    init { |source_, targetOn_, targetOff_, mode_, feedbackMode_, delay_, active_, targetOut_, buttonValue_|
         source = source_.asMidiSource;
         targetOn = targetOn_;
         target = targetOn; // for compability
         mode = mode_;
+        feedbackMode = feedbackMode_;
         buttonValue = buttonValue_;
         if(mode == \push){ targetOff = targetOn }{
             targetOff = targetOff_; //normally 
@@ -380,6 +391,7 @@ MidiButton : MidiSystem {
         active = active_;
         source.midiDevice.midiOut !? { if(targetOut_.isNil){ if(targetOn.respondsTo(\outputValue)){ targetOut = { targetOn.outputValue }; targetOn.addDependant(this) } }{ targetOut = targetOut_; targetOut.addDependant(this) } };// assign targetOut only if we are able to send it// standard assign targetOut_, if Nil, assign target.outputValue if available
         targetOut !? { this.feedback }; // make sure the midi output is initially synced to its target
+        if(mode == \plcFeedbackOnly){ plcMidiFeedback.add({ this.feedback }) }; 
     }
 
     messageMapping { |val|
@@ -418,13 +430,25 @@ MidiButton : MidiSystem {
         var message, value;
         value = targetOut.value.asFloat;
         //if(active.value(this)){// only send the feedback when the mapping is active, zie Onenote, supercollider, macrostructuur 2024-12-02
-            if(value == buttonValue){ 
-                message = [source.midiChannel, source.midiCC, source.midiDevice.lightingSkin[1]];
-                source.midiDevice.midiOut.noteOn(*message);
-            }{ 
-                message = [source.midiChannel, source.midiCC, source.midiDevice.lightingSkin[0]];
-                source.midiDevice.midiOut.noteOn(*message);
-            };
+        if(feedbackMode){
+            if(mode == \feedbackOnly){
+                if(value >= buttonValue){ 
+                    message = [source.midiChannel, source.midiCC, source.midiDevice.lightingSkin[1]];
+                    source.midiDevice.midiOut.noteOn(*message);
+                }{ 
+                    message = [source.midiChannel, source.midiCC, source.midiDevice.lightingSkin[0]];
+                    source.midiDevice.midiOut.noteOn(*message);
+                };
+            }{
+                if(value == buttonValue){ 
+                    message = [source.midiChannel, source.midiCC, source.midiDevice.lightingSkin[1]];
+                    source.midiDevice.midiOut.noteOn(*message);
+                }{ 
+                    message = [source.midiChannel, source.midiCC, source.midiDevice.lightingSkin[0]];
+                    source.midiDevice.midiOut.noteOn(*message);
+                };
+            }
+        }
         //};
     }
 
@@ -519,12 +543,12 @@ HidValRaw : HidSystem {
 }
 
 MidiInOutPair : Object {
-	var <indexIn, <indexOut, <midiOut, <nameInput, <nameOutput, <lightingSkin;
+	var <indexIn, <indexOut, <midiOut, <nameInput, <nameOutput, <>lightingSkin;
 
 	*new { |nameIn, nameOut, sysexInit, lightingSkin| //standard way of initiating is by providing a part of the name
 		var tempIndexIn, tempIndexOut;
         MIDIClient.initialized.not.if({MIDIClient.init()});
-        (tempIndexIn = MIDIClient.sources.detectIndex { |endpoint| endpoint.name.contains(nameIn)}) ?? { "WARNING: indexIn = Nil for %".format(nameIn).log(this) };
+        (tempIndexIn = MIDIClient.sources.detectIndex { |endpoint| endpoint.name.contains(nameIn)}) ?? { "WARNING: indexIn = Nil for %, a dummy will be used".format(nameIn).log(this) };
         nameOut !?({
             (tempIndexOut = MIDIClient.destinations.detectIndex { |endpoint| endpoint.name.contains(nameOut)}) ?? { "WARNING: indexOut = Nil for %".format(nameOut).log(this) };
         });
@@ -539,7 +563,7 @@ MidiInOutPair : Object {
 	init { |indexIn_, indexOut_, sysexInit, lightingSkin_|
 		indexIn = indexIn_;
 		indexOut = indexOut_;
-        nameInput = MIDIClient.sources[indexIn].name;
+        nameInput = if(indexIn.isNil){ "dummy" }{ MIDIClient.sources[indexIn].name }; //support for dummy's if input is not found
 		indexOut !? {
             nameOutput = MIDIClient.destinations[indexOut].name;
             midiOut = MIDIOut(indexOut);
@@ -560,7 +584,10 @@ MidiInOutPair : Object {
 	hash {
 		^this.instVarHash(#[\nameinput, \nameOutput]);
 	}
-    
+
+    customLighting { |lightingSkin_|
+        ^this.copy.lightingSkin_(lightingSkin_);
+    }
 }
 
 MidiSource : Object { //Midi Source

@@ -209,6 +209,7 @@ MusicLibrary {
     }
 
     findPlaylistByTitle { |string|
+        // not working anymore
         ^playlists.select({ |item| item.name.find(string).isNil.not });
     }
 
@@ -401,10 +402,12 @@ TrackDescription : SoundFile {
     }
 
     postInfo {
-        "\tTitle: \t%\n".postf( this.title );
-        "\tArtist: \t%\n".postf( this.artist );
-        "\tBPM: \t%\n".postf( this.bpm );
-        "\tKey: \t% % \tFifthScore: \t%\n".postf( this.key.rootNote, this.key.scale.name, this.key.fifthScore(this.key.rootNote) );
+        "\tTitle:\t%\n".postf( this.title );
+        "\tArtist:\t%\n".postf( this.artist );
+        "\tBPM:\t%\n".postf( this.bpm );
+        "\tKey:\t% % \tFifthScore: \t%\n".postf( this.key.rootNote, this.key.scale.name, this.key.fifthScore(this.key.rootNote) );
+        "\tLength:\t%\n".postf(this.duration);
+        "\n".postf();
     }
 
 }
@@ -498,8 +501,8 @@ Substring {
         // for multiplier == 1, this just return all tracks within the bounds, for multiplier == 2, we allow for speed which have double, and for bpm 0.5 we allow for half (NOTE on legacy, it used to include multiplier 4)
         var indices;
         indices = this.selectIndices({ |item, i| (item.bpm >= lowBound) && (item.bpm <= upBound) });
-        if(multiplier == 0.5){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm / 2) >= lowBound) && ((item.bpm / 2) <= upBound)) }) };
-        if(multiplier == 2){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm * 2) >= lowBound) && ((item.bpm * 2) <= upBound)) }) };
+        if(multiplier == 0.5){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm * 2) >= lowBound) && ((item.bpm * 2) <= upBound)) }) };
+        if(multiplier == 2){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm / 2) >= lowBound) && ((item.bpm / 2) <= upBound)) }) };
         //if(multiplier == 4){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm * 4) >= lowBound) && ((item.bpm * 4) <= upBound)) || (((item.bpm / 4) >= lowBound) && ((item.bpm / 4) <= upBound)) }) };
         ^this.at(indices.asSet.asArray);
     }

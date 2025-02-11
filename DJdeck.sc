@@ -157,6 +157,8 @@ DJdeck : Object {
             clock.beats = this.position2beatAdjusted(0);
             // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
             buffer = newBuffer;
+            trackBufferReady = true;
+            this.reactivateSynth;
             synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadTrack: \t"++track.artist++", "++track.title).log(this);
             ^true;

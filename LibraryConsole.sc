@@ -52,11 +52,11 @@ LibraryConsole {
         currentBpm = masterClock.tempo * 60;
         // the following defines the meaning of the tempoFilter parameter
         switch(tempoFilter.asInteger)
-            { 1 } { bpmLowBound = 0; bpmUpBound = currentBpm}
-            { 2 } { bpmLowBound = currentBpm - 10; bpmUpBound = currentBpm}
+            { 1 } { bpmLowBound = 0; bpmUpBound = currentBpm + 3}
+            { 2 } { bpmLowBound = currentBpm - 10; bpmUpBound = currentBpm + 3}
             { 3 } { bpmLowBound = currentBpm - 3; bpmUpBound = currentBpm + 3}
-            { 4 } { bpmLowBound = currentBpm; bpmUpBound = currentBpm + 10}
-            { 5 } { bpmLowBound = currentBpm; bpmUpBound = inf};
+            { 4 } { bpmLowBound = currentBpm - 3; bpmUpBound = currentBpm + 10}
+            { 5 } { bpmLowBound = currentBpm - 3; bpmUpBound = inf};
 
         // the following defines the meaning of the keyFilter parameter
         switch(keyFilter.asInteger)
@@ -107,7 +107,9 @@ LibraryConsole {
                     for(0,3){ |i|
                         bufferArray[i] = bufferArray[i + 1];
                     };
-                    bufferArray[4] = activeTrackArrayFiltered[count + 2];
+                    if(count + 2 <= (activeTrackArrayFiltered.size - 1)){
+                        bufferArray[4] = activeTrackArrayFiltered[count + 2].loadBuffer;
+                    };
                 }
             }{ 
                 tempCount = count - 1;
@@ -117,11 +119,17 @@ LibraryConsole {
                     for(4,1){ |i|
                         bufferArray[i] = bufferArray[i - 1];
                     };
-                    bufferArray[0] = activeTrackArrayFiltered[count - 2];
-                }
+                    if(count - 2 >= 0){
+                        bufferArray[0] = activeTrackArrayFiltered[count - 2].loadBuffer;
+                    };
+                };
             };
             ^prelistenDeck.loadTrackFromBuffer(activeTrackArrayFiltered[count], bufferArray[2]);
         }
+    }
+
+    previousTrack_ {
+        this.nextTrack_(false);
     }
 
     installPlaylist {
@@ -129,9 +137,10 @@ LibraryConsole {
         count = -1;
         "filtered playlist contains % tracks".format(activeTrackArrayFiltered.size).log(this);
         if(activeTrackArrayFiltered.isEmpty.not){
-            // we initialize the buffer array for this playlist, we keep the first three empty, because these are use for the previous tracks, and we fill the third one upon calling the first nextTrack, so we only fill spot 3,4
-            for(3, 1 + activeTrackArrayFiltered.size.min(2)){ |i|
-                bufferArray[i] = activeTrackArrayFiltered[i].loadBuffer; 
+            // we initialize the buffer array for this playlist, we keep the first three (0, 1, 2) empty, because these are use for the previous tweo tracks, and we fill the third one upon calling the first nextTrack, so we only fill spot 3,4
+            bufferArray[3] = activeTrackArrayFiltered[0].loadBuffer; 
+            if(activeTrackArrayFiltered.size >= 2){
+                bufferArray[4] = activeTrackArrayFiltered[1].loadBuffer; 
             };
         };
         this.changed(\numberOfTracks);

@@ -323,9 +323,9 @@ MidiCC : MidiSystem {
 
     feedback {
         var message;
-        if(feedbackMode){
+        if(source.midiDevice.midiOut.isNil.not && targetOut.isNil.not && feedbackMode && active.value(this)){
             message = this.prepareFeedbackMessage;
-            if(active.value(this)){ source.midiDevice.midiOut.control(*message) }; // only send the feedback when the mapping is active
+            source.midiDevice.midiOut.control(*message); // only send the feedback when the mapping is active
         }
     }
 

@@ -86,9 +86,17 @@ TrackClock : TempoClock {
     }
 
     beats_ { |beat|
-        super.beats_(beat);
+        if(tempo > 0){ super.beats_(beat) };
         if(tempo == 0){ beatOfTurning = beat }; 
+        if(tempo < 0){ beatOfTurning = beat; backwardClock.beats_(0) };
         this.changed([\beats, beat]); // beat jumping is tricky, as the logical time is kept constant during function calls;
+    }
+
+    beatsNoJump_ { |beat|
+        // only update the clock itself, do not demand the track to follow; this can be used when you want to align the clock with the track
+        if(tempo > 0){ super.beats_(beat) };
+        if(tempo == 0){ beatOfTurning = beat }; 
+        if(tempo < 0){ beatOfTurning = beat; backwardClock.beats_(0) }
     }
 
     pause {

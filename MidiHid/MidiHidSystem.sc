@@ -342,13 +342,13 @@ MidiButton : MidiSystem {
     // direct calls targetOn with value 1, and targetOff with value 0
 
     classvar <initializedMidiButton = false;
-    var <targetOn, <targetOff, <mode, <feedbackMode = true, dynamicTask, delay, delayedEventOccured = false, <buttonValue;
+    var <targetOn, <targetOff, <mode, <feedbackMode = true, dynamicTask, delay, spacingTime, previousTime = 0.0, delayedEventOccured = false, <buttonValue;
 
-    *new { |source, targetOn, targetOff, mode = \push, feedbackMode = true, delay = 0.0, active = true, targetOut, buttonValue = 1|
+    *new { |source, targetOn, targetOff, mode = \push, feedbackMode = true, delay = 0.0, spacingTime = 0.0, active = true, targetOut, buttonValue = 1|
         if(([\push, \toggle, \direct, \feedbackOnly, \plcFeedbackOnly].includes(mode)).not){ Error("% is not a valid mode.".format(mode)).throw }; // throw an error when the mode is not valid
         if(mode == \toggle && targetOn.respondsTo(\parameterValue).not){ Error("Toggle mode requires the target to respond to .parameterValue").throw };
         initializedMidiButton.not.if({ this.init });
-        ^super.new.init(source, targetOn, targetOff, mode, feedbackMode, delay, active, targetOut, buttonValue).add;
+        ^super.new.init(source, targetOn, targetOff, mode, feedbackMode, delay, spacingTime, active, targetOut, buttonValue).add;
     }
 
     *init {
@@ -376,7 +376,7 @@ MidiButton : MidiSystem {
         initializedMidiButton = true;
     }
 
-    init { |source_, targetOn_, targetOff_, mode_, feedbackMode_, delay_, active_, targetOut_, buttonValue_|
+    init { |source_, targetOn_, targetOff_, mode_, feedbackMode_, delay_, spacingTime_, active_, targetOut_, buttonValue_|
         source = source_.asMidiSource;
         targetOn = targetOn_;
         target = targetOn; // for compability
@@ -387,6 +387,7 @@ MidiButton : MidiSystem {
             targetOff = targetOff_; //normally 
         };
         delay = delay_;
+        spacingTime = spacingTime_;
         if(delay > 0){dynamicTask = DynamicTask.new(SystemClock, { this.noteOnBasicAction; delayedEventOccured = true })}; // in case we need to let event only occur if pressed more than delay time, we schedule it; and if needed cancel it
         active = active_;
         source.midiDevice.midiOut !? { if(targetOut_.isNil){ if(targetOn.respondsTo(\outputValue)){ targetOut = { targetOn.outputValue }; targetOn.addDependant(this) } }{ targetOut = targetOut_; targetOut.addDependant(this) } };// assign targetOut only if we are able to send it// standard assign targetOut_, if Nil, assign target.outputValue if available
@@ -403,13 +404,15 @@ MidiButton : MidiSystem {
     }
 
     noteOnAction { |val|
-        if(active.value(this)){
+        var currentTime = SystemClock.seconds;
+        if(active.value(this) && (currentTime - previousTime > spacingTime)){
             if(delay > 0){ // to implement that a certain amount of time needs to be pushed before the action takes place, we schedule the task and cancel it if we release it earlier
                 dynamicTask.sched(delay); // sched the normal behavior (we have determined that dynamicTask = normal behavior earlier)
             }{ 
                 this.noteOnBasicAction(val);
             }
-        }
+        };
+        previousTime = currentTime; // store for use in next call
     }
 
     noteOnBasicAction { |val|

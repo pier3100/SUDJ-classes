@@ -126,6 +126,7 @@ DJdeck : Object {
             buffer = track.loadBuffer(action: { trackBufferReady = true; this.reactivateSynth; action.value });
             synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadTrack: \t"++track.artist++", "++track.title).log(this);
+            this.endOfTrackSched; // this paused the track when reaching the end
             ^true;
         }{
             (deckNr.asString++", track is still playing").log(this);
@@ -149,6 +150,7 @@ DJdeck : Object {
             this.reactivateSynth;
             synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadDouble: \t"++track.artist++", "++track.title).log(this);
+            this.endOfTrackSched;
             ^true;
         }{
             (deckNr.asString++", track is still playing").log(this);
@@ -171,6 +173,7 @@ DJdeck : Object {
             this.reactivateSynth;
             synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadTrack: \t"++track.artist++", "++track.title).log(this);
+            this.endOfTrackSched;
             ^true;
         }{
             (deckNr.asString++", track is still playing").log(this);
@@ -232,7 +235,7 @@ DJdeck : Object {
     play {
         if(trackBufferReady && track.title.isNil.not){ // check if track is properly loaded and ready
             if(clock.beats < this.time2beat(track.duration)){ // check if not superseded end of treck
-                if(clock.sync){ clock.phaseSync };
+                if(clock.sync){ clock.phaseSync }{ this.align };
                 clock.resume;
                 //synth.set(\mute, 0); 
                 if(endOfTrackEvent){ this.endOfTrackSched };
@@ -518,7 +521,7 @@ DJdeck : Object {
         clock.schedAbs(this.time2beat(track.duration), {
             endOfTrackEvent = true;
             "endOfTrackEvent".log(this);
-            this.pause;
+            // this.pause;
         });
         endOfTrackEvent = false; // we have taken action upon the endOfTrackEvent, so we can now reset it
     }
@@ -541,6 +544,7 @@ DJdeck : Object {
             };
         };
         if(theChanger == \sync){
+            "djdeck".postln;
             this.changed(\sync);
         };
         if(theChanger == \playPause){

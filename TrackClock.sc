@@ -173,6 +173,7 @@ TrackClock : TempoClock {
     deactiveSync {
         sync = false;
         this.changed(\sync);
+        "clock".postln;
         master.removeDependant(this);
     }
 

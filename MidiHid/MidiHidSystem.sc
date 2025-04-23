@@ -421,7 +421,7 @@ MidiButton : MidiSystem {
     }
 
     noteOffAction {
-        if(delay > 0){ dynamicTask.cancel }; // at this point either the dynamicTask has already been executed (cancelling it doesn't matter), or we release the button earlier than the delay time, and we want to cancel the scheduled event (because should only be executed if button pushed > delay)
+        if(delay > 0){ dynamicTask.cancel_ }; // at this point either the dynamicTask has already been executed (cancelling it doesn't matter), or we release the button earlier than the delay time, and we want to cancel the scheduled event (because should only be executed if button pushed > delay)
         if(active){
             targetOff.value(this.messageMapping(0), delayedEventOccured); // anyhow execute the targetOff, we always evaluate the noteOffAction with value 0; we supply the delayedEventOccured; you can use this in your targetOff if you like
             targetOut !? { this.feedback };

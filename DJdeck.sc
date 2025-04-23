@@ -73,7 +73,7 @@ NOT NEEDED
 DJdeck : Object {
     var <deckNr;
     var <bus, <clock, <buffer, <synth, <referenceBus, <track;
-    var trackTempo = 1, <quePoint = 0, <schedJump = false, <loop = false, beatJumpBeats = -4, loopTable, <loopTableIndex = 9;
+    var trackTempo = 1, <quePoint = 0, jumpTask, <schedJump = false, <loop = false, beatJumpBeats = -4, loopTable, <loopTableIndex = 9;
     var <trackBufferReady = false;
     var testBus, testBuffer;
     var <positionSetBus, <playerSelectionBus, <pauseBus;
@@ -110,6 +110,7 @@ DJdeck : Object {
                 (deckNr.asString++", trackClock aligned").log(this);
             };
         },'/tr', Server.default.addr);
+        jumpTask = DynamicTask.new(clock);
     }
 
     // frontend: tracks
@@ -333,11 +334,12 @@ DJdeck : Object {
     // backend: loop
     loop_ { |bool|
         if(bool){
-            if(schedJump.not){
+            if(jumpTask.cancel){
                 loop = true;
                 this.beatJumpScheduled; // if we are not allready beatjumping, we active the beatJumping; in scheduleJump we check whether we have not yet allready scheduled something
             };
         }{
+            jumpTask.cancel_;
             loop = false;
         };
         this.changed(\loop);
@@ -461,6 +463,16 @@ DJdeck : Object {
     }
 
     scheduleJump { |jumpAtBeat|
+        if(jumpTask.cancel && (jumpAtBeat <= this.time2beat(track.duration))){
+            jumpTask.target_({
+                clock.beats_((clock.beats + beatJumpBeats)); // we modify the clock's beats, the track follows via the .update callback
+                if(loop){ SystemClock.sched(0.1,{ this.scheduleJump(jumpAtBeat) }) }; // we need to schedule this a bit later in order to deal with the fact that logical time remains constant during a scheduled task;
+            });
+            jumpTask.schedAbs(jumpAtBeat);
+        };
+    }
+
+    /* scheduleJump { |jumpAtBeat|
         if(schedJump.not && (jumpAtBeat <= this.time2beat(track.duration))){
             clock.schedAbs(jumpAtBeat, {
                 clock.beats_((clock.beats + beatJumpBeats)); // we modify the clock's beats, the track follows via the .update callback
@@ -469,7 +481,7 @@ DJdeck : Object {
             });
             schedJump = true;
         };
-    }
+    } */
 
     jumpToBeat { |beat|
         // let the clock jump to a specific beat and make sure track follows; this function is called via .update; the clock is leading

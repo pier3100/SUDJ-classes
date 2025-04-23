@@ -1,6 +1,6 @@
 DynamicTask {
     // the target can be scheduled and rescheduled
-    var <clockUsed, cancel = false, <>target, <schedAtTime;
+    var <clockUsed, <cancel = true, <>target, <schedAtTime;
 
     *new { |clock, target|
         ^super.new.init(clock, target);
@@ -11,7 +11,7 @@ DynamicTask {
         target = target_;
     }
 
-    cancel { |bool|
+    cancel_ { |bool|
         cancel = bool ? true;
     }
 
@@ -33,6 +33,7 @@ DynamicTask {
 
     awake { |time, seconds, clock|
         if((time == schedAtTime) && cancel.not){ 
+            cancel = true;
             ^target.awake(time, seconds, clock); 
         }
     }

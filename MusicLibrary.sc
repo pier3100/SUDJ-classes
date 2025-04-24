@@ -37,6 +37,8 @@ MusicLibrary {
             "Loading library from Traktor from scratch".log(this);
             instance = this.newFromTraktor(traktorLibraryPath);
         };
+        instance.playlists.leafDo({ |path, item| if(item.class == Smartlist || item.class == PseudoPlaylist){ item.selectTracks }} ); // we make sure we have up to date tracklist for automatically generated playlists
+        instance.barcodeDictionary_;
         ^instance;
     }
 
@@ -95,10 +97,12 @@ MusicLibrary {
     }
 
     loadAllPlaylists { |collectionText|
-        var customPlaylistFolder;
+        var customPlaylistFolder, specialPlaylistFolder;
         this.loadPlaylistsFromTraktor(collectionText); 
         customPlaylistFolder = IdentityDictionary.new;
-        playlists.put(\Custom, customPlaylistFolder);
+        specialPlaylistFolder = IdentityDictionary.new;
+        playlists.put("$ROOT".asSymbol, \Custom, customPlaylistFolder);
+        playlists.put("$ROOT".asSymbol, \Special, specialPlaylistFolder);
         //this.barcodeDictionary_; // we do it later after having added our custom playlists
     }
 
@@ -145,21 +149,10 @@ MusicLibrary {
 
     }
 
-    addPseudoPlaylist { |name, folder|
-        // create and add a playlist which contains all tracks of the playlists of a single playlist folder
-        var trackList;
-        trackList = [];
-        folder.do({ |containedPlaylist|
-            trackList = trackList ++ containedPlaylist.tracksIndex;
-        });
-        trackList = trackList.asSet.asArray;
-        playlists.put("$ROOT".asSymbol, \Custom, name.asSymbol, Playlist.new(name, trackList));
-    }
-
     barcodeDictionary_ {
         // we make an identity dictionary which maps the barcode ID to the playlist itself, we assume the ID is unique, if non we give a warning
         barcodeDictionary = IdentityDictionary.new(playlists.size);
-        playlists.leafDo({ |key, item| 
+        playlists.leafDo({ |path, item| 
             barcodeDictionary.putGet(item.barcodeId, item) !? { "WARNING: non-unique barcode ID".log(this) };
         })
     }
@@ -209,8 +202,15 @@ MusicLibrary {
     }
 
     findPlaylistByTitle { |string|
-        // not working anymore
-        ^playlists.select({ |item| item.name.find(string).isNil.not });
+        playlists.leafDo({|path, item| if(item.name.find(string).isNil.not){ "%\t".postf( item.name); path.postcs}});
+    }
+
+    renamePlaylist { |path, newName|
+        var playlist;
+        playlist = playlists.at(*path);
+        playlists.removeAt(*path);
+        playlist.name = newName;
+        playlist.addToLibrary(*path);
     }
 
     store { |path|
@@ -218,23 +218,45 @@ MusicLibrary {
     }
 }
 
-Playlist {
+AbstractPlaylist {
     var <>name, <>uuId, <>barcodeId, <>tracksIndex;
 
-    
-    *new { |name, tracksIndex|
-        ^super.new.init(name, tracksIndex);
+    *new {
+        ^super.new;
+    }
+
+    setName { |name_, uuId_|
+        name = name_;
+        uuId = uuId_ ? ("sudjsudj" ++ name ++ "sudjsudj").asHexAscii; // all our own custom playlists, get this prefix and postfix
+        barcodeId = this.uuId2barcodeId(uuId);
+    }
+
+    uuId2barcodeId { |uuIdString|
+        // the uuID is expected to be 32 characters long, the barcodeID can only be 9 digits long, furthermore uuID is hexidecimal, while barcodeID should be decimal (since we can only communicate a decimal number via hidapi)
+        // we take a selection of digits
+        ^(uuIdString.digit*(2**Array.series(uuIdString.size,0,1))).sum.asString.copyRange(0,8).asSymbol;
+    }
+
+    asArray {
+        ^Library.at(\musicLibrary).tracks.at(tracksIndex);
+    }
+
+    randomTrack { 
+        ^Library.at(\musicLibrary).tracks[tracksIndex.rand];
+    }
+}
+
+Playlist : AbstractPlaylist {
+    *new { |name, tracksIndex, uuId|
+        ^super.new.setName(name, uuId).init(tracksIndex);
     }
     
     *newFromTraktor { |playlistString|
         ^super.new.initFromTraktor(playlistString);
     }
 
-    init { |name_, tracksIndex_|
-        name = name_;
+    init { |tracksIndex_|
         tracksIndex = tracksIndex_;
-        uuId = ("sudjsudj" ++ name ++ "sudjsudj").asHexAscii; // all our own custom playlists, get this prefix and postfix
-        barcodeId = this.uuId2barcodeId(uuId);
     }
 
     initFromTraktor { |playlistString|
@@ -261,19 +283,52 @@ Playlist {
         };
         ^output;
     }
+}
 
-    uuId2barcodeId { |uuIdString|
-        // the uuID is expected to be 32 characters long, the barcodeID can only be 9 digits long, furthermore uuID is hexidecimal, while barcodeID should be decimal (since we can only communicate a decimal number via hidapi)
-        // we take a selection of digits
-        ^(uuIdString.digit*(2**Array.series(uuIdString.size,0,1))).sum.asString.copyRange(0,8).asSymbol;
+PseudoPlaylist : AbstractPlaylist {
+    var <>folderPathArray;
+
+    *new { |name_, folderPathArray_, uuId_| 
+        ^super.new.setName(name_, uuId_).init(folderPathArray_);
     }
 
-    asArray {
-        ^Library.at(\musicLibrary).tracks.at(tracksIndex);
+    init { |folderPathArray_|
+        folderPathArray = folderPathArray_;
+        this.selectTracks;
     }
 
-    randomTrack { 
-        ^Library.at(\musicLibrary).tracks[tracksIndex.rand];
+    selectTracks {
+        var trackList= [];
+        Library.at(\musicLibrary).playlists.at(*folderPathArray).do({ |containedPlaylist|
+            trackList = trackList ++ containedPlaylist.tracksIndex;
+        });
+        tracksIndex = trackList.asSet.asArray;
+    }
+
+    addToLibrary {
+        Library.at(\musicLibrary).playlists.put("$ROOT".asSymbol, \Special, name.asSymbol, this);
+    }
+}
+
+Smartlist : AbstractPlaylist {
+    // a playlist which is formed by selecting all tracks which abide the ruleFunction
+    var <>ruleFunction;
+
+    *new { |name_, ruleFunction_, uuId_| 
+        ^super.new.setName(name_, uuId_).init(ruleFunction_);
+    }
+
+    init { |ruleFunction_|
+        ruleFunction = ruleFunction_;
+        this.selectTracks;
+    }
+
+    selectTracks { 
+        tracksIndex = Library.at(\musicLibrary).tracks.selectIndices(ruleFunction);
+    }
+
+    addToLibrary {
+        Library.at(\musicLibrary).playlists.put("$ROOT".asSymbol, \Special, name.asSymbol, this);
     }
 }
 
@@ -510,6 +565,53 @@ Substring {
 
     rand {
         ^this.at(this.size.rand);
+    }
+}
+
++ Dictionary {
+    selectKeys { |function|
+        var res = Array.new(this.size);
+		this.keysValuesDo {|key, item| if (function.value(item, key)) { res.add(key) } }
+		^res;
+    }
+
+    removeNil {
+        this.keysValuesDo({ |key,item| if(item.isNil){ this.removeAt(key) }});
+    }
+
+    removeNotUsable {
+        this.keysValuesDo({ |key,item| if(item.usable.not){ this.removeAt(key) }});
+    }
+
+    filterKey { |key, bpm, distanceLow, distanceHigh, minorMajor|
+        // filters the track array with respect to a reference key, whereby both the reference track and toBeFiltered tracks are repitched to the same bpm; only output tracks whose keyDistance is in between the distance tresholds
+        var ids, minorMajorFiltered;
+        minorMajorFiltered = this;
+        // filter based on minorMajor
+        if(minorMajor == "major"){
+            ids = this.selectKeys({ |item| item.key.scale == Scale.major });
+            minorMajorFiltered = this.atAll(ids);
+        };
+        if(minorMajor == "minor"){
+            ids = this.selectKeys({ |item| item.key.scale == Scale.minor });
+            minorMajorFiltered = this.atAll(ids);
+        };
+        // filter based on circle of fifth distance
+        ids = minorMajorFiltered.selectKeys({ |item| 
+            var keyDistance;
+            keyDistance = item.key.modulate(bpm/item.bpm).compatibility(key);
+            (keyDistance >= distanceLow) && (keyDistance <= distanceHigh) });
+        ^minorMajorFiltered.atAll(ids);
+    }
+
+    filterBPM { |lowBound, upBound, multiplier = 1|
+        // for multiplier == 1, this just return all tracks within the bounds, for multiplier == 2, we allow for speed which have double, and for bpm 0.5 we allow for half (NOTE on legacy, it used to include multiplier 4)
+        var ids;
+        ids = this.selectKeys({ |item| (item.bpm >= lowBound) && (item.bpm <= upBound) });
+        if(multiplier == 0.5){ ids = ids ++ this.selectKeys({ |item| (((item.bpm * 2) >= lowBound) && ((item.bpm * 2) <= upBound)) }) };
+        if(multiplier == 2){ ids = ids ++ this.selectKeys({ |item| (((item.bpm / 2) >= lowBound) && ((item.bpm / 2) <= upBound)) }) };
+        //if(multiplier == 4){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm * 4) >= lowBound) && ((item.bpm * 4) <= upBound)) || (((item.bpm / 4) >= lowBound) && ((item.bpm / 4) <= upBound)) }) };
+        ^this.atAll(ids.asSet.asArray);
     }
 }
 

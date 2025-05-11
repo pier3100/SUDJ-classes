@@ -19,9 +19,15 @@ MusicLibrary {
 
     *loadFromTraktor{ |libraryPath, traktorLibraryPath, forceLoad = false|
         // load the archived library and update it from the Traktor collection if needed, if no archive exists, create new library from scratch from the Traktor collection
-        var instance;
+        var instance, tracksOld;
         if(File.exists(libraryPath) && forceLoad.not){
+            // reusing existing library is broken; but it is also redundant is reloading from scratch is considerably faster
             instance = this.load(libraryPath);
+            // apparently there is a bug in supercollider in loading the track dictionary; which we can circumvent if we overwrite it
+            tracksOld = instance.tracks;
+            instance.tracks = Library.new(tracksOld.size);
+            tracksOld.keysValuesDo({|key, value| instance.tracks.put(key,value)});
+
             if(File.mtime(traktorLibraryPath) > File.mtime(libraryPath)){ // if traktor has recently updated the collection, we need to update our collection as well
                 var collectionText;
                 "Updating Traktor library".log(this);
@@ -60,20 +66,20 @@ MusicLibrary {
         tracksText = collectionText.findInBetween("<COLLECTION", "</COLLECTION>").string;
         numberTracks = collectionText.lookup("COLLECTION ENTRIES").asInteger;
         for(0,(numberTracks-1)){ |i|
-            var substring, id, string, track, dateModifiedTrack;
+            var substring, path, string, track, dateModifiedTrack;
             substring = tracksText.findInBetween("<ENTRY", "</ENTRY>", previousIndex);
             previousIndex = substring.endIndex;
             string = substring.string;       
             dateModifiedTrack = string.lookup("MODIFIED_DATE").replace("\/");
             if(dateModifiedTrack > dateModifiedLibrary){ // we only need to load the track if it is updated recently; we compare the strings, which are suited for this purpose
-                id = string.lookup("AUDIO_ID");
-                track = this.findId(id); // retrieve track in library by looking it up by id
+                path = (string.lookup("VOLUME")++string.lookup("LOCATION DIR")++string.lookup("FILE")).formatPlain.traktorPath2path;
+                track = tracks.at(path.asSymbol); // retrieve track in library by looking it up by id
                 if(track.isNil){ 
-                    tracks.add(TrackDescription.newFromTraktor(string));
+                    track = TrackDescription.newFromTraktor(string);
+                    tracks.put(track.path.asSymbol, track);
                      "track % appended to tracklist: \t %".format(i, substring.string).log(this);
                     }{
-                    track.fromTraktor(string); 
-                    if(track.usable.not){ "track % not usable bit still in tracklist: \t %".format(i, substring.string).log(this) }; // this is a bit ugly because if the new Track information 
+                    if(track.usable.not){ "track % not usable but still in tracklist: \t %".format(i, substring.string).log(this) }; // this is a bit ugly because if the new Track information 
                 }
             }
         };
@@ -84,13 +90,13 @@ MusicLibrary {
         var tracksText, numberTracks, previousIndex = 0;
         tracksText = collectionText.findInBetween("<COLLECTION", "</COLLECTION>").string;
         numberTracks = collectionText.lookup("COLLECTION ENTRIES").asInteger;
-        tracks = Array.newClear(numberTracks);
+        tracks = Dictionary.new(numberTracks);
         for(0, (numberTracks - 1)){ |i|
             var substring, track;
             substring = tracksText.findInBetween("<ENTRY", "</ENTRY>", previousIndex);
             previousIndex = substring.endIndex;
             track = TrackDescription.newFromTraktor(substring.string);
-            if(track.usable){ tracks.put(i, track) }{ "track % not usable: \t %".format(i, substring.string).log(this) };
+            if(track.usable){ tracks.put(track.path.asSymbol, track) }{ "track % not usable: \t %".format(i, substring.string).log(this) };
         };
         tracks.removeNil;
         ^tracks;
@@ -173,35 +179,20 @@ MusicLibrary {
         csvFile.close;
     }
 
-    asArray {
-        ^tracks;
-    }
-
     findTrackByTitle { |string|
-        // rewrite using .selectIndices(function)
-        var result = Array.new(this.tracks.size);
-        tracks.do({ |item, i| if(item.title.find(string).isNil.not){ result.add(item) } });
-        ^result;
+        ^tracks.select({ |item| item.title.find(string).isNil.not});
     }
 
     findPath { |path|
         ^tracks.select({ |item| item.path == path }).[0];
-        //^tracks[this.findPathIndices(path)];
     }
 
-    findId { |id|
-        ^tracks.select({ |item| item.id == id }).[0];
-    }
-
-    findIdIndices { |id|
-        ^tracks.selectIndices({ |item| item.id == id });
-    }
-
-    findPathIndices { |path|
-        ^tracks.selectIndices({ |item, i| item.path == path });
+    findPathKeys { |path|
+        ^tracks.selectKeys({ |item| item.path == path });
     }
 
     findPlaylistByTitle { |string|
+    //TODO remove case sensitivity
         playlists.leafDo({|path, item| if(item.name.find(string).isNil.not){ "%\t".postf( item.name); path.postcs}});
     }
 
@@ -219,7 +210,7 @@ MusicLibrary {
 }
 
 AbstractPlaylist {
-    var <>name, <>uuId, <>barcodeId, <>tracksIndex;
+    var <>name, <>uuId, <>barcodeId, <>trackKeyArray;
 
     *new {
         ^super.new;
@@ -237,26 +228,26 @@ AbstractPlaylist {
         ^(uuIdString.digit*(2**Array.series(uuIdString.size,0,1))).sum.asString.copyRange(0,8).asSymbol;
     }
 
-    asArray {
-        ^Library.at(\musicLibrary).tracks.at(tracksIndex);
+    asTrackArray {
+        ^Library.at(\musicLibrary).tracks.atAll(trackKeyArray);
     }
 
     randomTrack { 
-        ^Library.at(\musicLibrary).tracks[tracksIndex.rand];
+        ^Library.at(\musicLibrary).tracks[trackKeyArray.rand];
     }
 }
 
 Playlist : AbstractPlaylist {
-    *new { |name, tracksIndex, uuId|
-        ^super.new.setName(name, uuId).init(tracksIndex);
+    *new { |name, trackKeyArray, uuId|
+        ^super.new.setName(name, uuId).init(trackKeyArray);
     }
     
     *newFromTraktor { |playlistString|
         ^super.new.initFromTraktor(playlistString);
     }
 
-    init { |tracksIndex_|
-        tracksIndex = tracksIndex_;
+    init { |trackKeyArray_|
+        trackKeyArray = trackKeyArray_;
     }
 
     initFromTraktor { |playlistString|
@@ -268,17 +259,19 @@ Playlist : AbstractPlaylist {
         if(playlistLength == 0){
             output = nil;
         }{
-            tracksIndex = Array.newClear(playlistLength);
+            trackKeyArray = Array.newClear(playlistLength);
             for(0,(playlistLength-1)){ |i|
-                var substring, trackIndex, path;
+                var substring, path;
                 substring = playlistString.findInBetween("<ENTRY", "</ENTRY>", previousIndex);
                 previousIndex = substring.endIndex;
                 path = substring.string.lookup("KEY").formatPlain.traktorPath2path;
-                trackIndex = Library.at(\musicLibrary).findPathIndices(path)[0];
-                tracksIndex.put(i, trackIndex);
-                trackIndex ?? { "track missing in %: \t %".format(name, path).log(this) }
+                if(Library.at(\musicLibrary).tracks.at(path.asSymbol).isNil){ // check if the path is a key in the tracklist
+                    "track missing in %: \t %".format(name, path).log(this)
+                }{
+                    trackKeyArray.put(i, path.asSymbol);
+                }
             };
-            tracksIndex.removeNil;
+            trackKeyArray.removeNil;
             output = this;
         };
         ^output;
@@ -298,11 +291,11 @@ PseudoPlaylist : AbstractPlaylist {
     }
 
     selectTracks {
-        var trackList= [];
+        var trackList = [];
         Library.at(\musicLibrary).playlists.at(*folderPathArray).do({ |containedPlaylist|
-            trackList = trackList ++ containedPlaylist.tracksIndex;
+            trackList = trackList ++ containedPlaylist.trackKeyArray;
         });
-        tracksIndex = trackList.asSet.asArray;
+        trackKeyArray = trackList.asSet.asArray;
     }
 
     addToLibrary {
@@ -324,7 +317,7 @@ Smartlist : AbstractPlaylist {
     }
 
     selectTracks { 
-        tracksIndex = Library.at(\musicLibrary).tracks.selectIndices(ruleFunction);
+        trackKeyArray = Library.at(\musicLibrary).tracks.selectKeys(ruleFunction);
     }
 
     addToLibrary {
@@ -585,33 +578,33 @@ Substring {
 
     filterKey { |key, bpm, distanceLow, distanceHigh, minorMajor|
         // filters the track array with respect to a reference key, whereby both the reference track and toBeFiltered tracks are repitched to the same bpm; only output tracks whose keyDistance is in between the distance tresholds
-        var ids, minorMajorFiltered;
+        var paths, minorMajorFiltered;
         minorMajorFiltered = this;
         // filter based on minorMajor
         if(minorMajor == "major"){
-            ids = this.selectKeys({ |item| item.key.scale == Scale.major });
-            minorMajorFiltered = this.atAll(ids);
+            paths = this.selectKeys({ |item| item.key.scale == Scale.major });
+            minorMajorFiltered = this.atAll(paths);
         };
         if(minorMajor == "minor"){
-            ids = this.selectKeys({ |item| item.key.scale == Scale.minor });
-            minorMajorFiltered = this.atAll(ids);
+            paths = this.selectKeys({ |item| item.key.scale == Scale.minor });
+            minorMajorFiltered = this.atAll(paths);
         };
         // filter based on circle of fifth distance
-        ids = minorMajorFiltered.selectKeys({ |item| 
+        paths = minorMajorFiltered.selectKeys({ |item| 
             var keyDistance;
             keyDistance = item.key.modulate(bpm/item.bpm).compatibility(key);
             (keyDistance >= distanceLow) && (keyDistance <= distanceHigh) });
-        ^minorMajorFiltered.atAll(ids);
+        ^minorMajorFiltered.atAll(paths);
     }
 
     filterBPM { |lowBound, upBound, multiplier = 1|
         // for multiplier == 1, this just return all tracks within the bounds, for multiplier == 2, we allow for speed which have double, and for bpm 0.5 we allow for half (NOTE on legacy, it used to include multiplier 4)
-        var ids;
-        ids = this.selectKeys({ |item| (item.bpm >= lowBound) && (item.bpm <= upBound) });
-        if(multiplier == 0.5){ ids = ids ++ this.selectKeys({ |item| (((item.bpm * 2) >= lowBound) && ((item.bpm * 2) <= upBound)) }) };
-        if(multiplier == 2){ ids = ids ++ this.selectKeys({ |item| (((item.bpm / 2) >= lowBound) && ((item.bpm / 2) <= upBound)) }) };
+        var paths;
+        paths = this.selectKeys({ |item| (item.bpm >= lowBound) && (item.bpm <= upBound) });
+        if(multiplier == 0.5){ paths = paths ++ this.selectKeys({ |item| (((item.bpm * 2) >= lowBound) && ((item.bpm * 2) <= upBound)) }) };
+        if(multiplier == 2){ paths = paths ++ this.selectKeys({ |item| (((item.bpm / 2) >= lowBound) && ((item.bpm / 2) <= upBound)) }) };
         //if(multiplier == 4){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm * 4) >= lowBound) && ((item.bpm * 4) <= upBound)) || (((item.bpm / 4) >= lowBound) && ((item.bpm / 4) <= upBound)) }) };
-        ^this.atAll(ids.asSet.asArray);
+        ^this.atAll(paths.asSet.asArray);
     }
 }
 

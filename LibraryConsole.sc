@@ -70,8 +70,7 @@ LibraryConsole {
             { 2 } { minorMajorFilter = nil }
             { 3 } { minorMajorFilter = "major" };
 
-        activeTrackArrayFiltered = activePlaylist.asArray.removeNotUsable;
-        activeTrackArrayFiltered = activeTrackArrayFiltered.filterBPM(bpmLowBound, bpmUpBound, tempoMultiplier);
+        activeTrackArrayFiltered = activePlaylist.filterBPM(bpmLowBound, bpmUpBound, tempoMultiplier);
         activeTrackArrayFiltered = activeTrackArrayFiltered.filterKey(referenceTrack.key.modulate(currentBpm/referenceTrack.bpm), currentBpm, keyToleranceDistanceLow, keyToleranceDistanceHigh, minorMajorFilter);
     }
 
@@ -147,7 +146,7 @@ LibraryConsole {
     }
 
     loadPlaylist { |playlist|
-        activePlaylist = playlist;
+        activePlaylist = playlist.asTrackArray.removeNotUsable;
         this.filter;
         this.installPlaylist;
     }

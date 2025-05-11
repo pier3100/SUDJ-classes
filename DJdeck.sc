@@ -73,10 +73,10 @@ NOT NEEDED
 DJdeck : Object {
     var <deckNr;
     var <bus, <clock, <buffer, <synth, <referenceBus, <track;
-    var trackTempo = 1, <quePoint = 0, jumpTask, <schedJump = false, <loop = false, beatJumpBeats = -4, loopTable, <loopTableIndex = 9;
+    var <quePoint = 0, <jumpTask, <schedJump = false, <loop = false, <beatJumpBeats = -4, <jumpAtBeat, loopTable, <loopTableIndex = 9;
     var <trackBufferReady = false;
     var testBus, testBuffer;
-    var <positionSetBus, <playerSelectionBus, <pauseBus;
+    var <positionSetBus, <playerSelectionBus;
     var <playerSelected = false;
     var <endOfTrackEvent = true; // this makes sure that we prepare for the endOfTrack initially
     var <scratchEventNumber = 0;
@@ -96,10 +96,9 @@ DJdeck : Object {
         bus = b;
         clock = TrackClock.new(125/60).pause;
         clock.addDependant(this);
-        referenceBus = Bus.control(numChannels: 2);
+        referenceBus = Bus.control(numChannels: 3);
         positionSetBus = Bus.control;
         playerSelectionBus = Bus.control; // initialized to 0, which corresponds with playerSelected = false
-        pauseBus = Bus.control;
         buffer = Buffer.loadCollection(Server.default,[0, 0, 0, 0], 2, action: {this.spawnSynths(target, addAction)} ); // use .loadCollection instead of .alloc because it allows to supply an action function; after the buffer is setup, we create the synth
         // ideally I would free the buffer here, but then the buffer will be free before the synth is created
         track = TrackDescription.newDummy(125, 6); // placeholder
@@ -107,7 +106,6 @@ DJdeck : Object {
         oscListener = OSCFunc({ |msg| 
             if(msg[1] == synth.nodeID){
                 this.align;
-                (deckNr.asString++", trackClock aligned").log(this);
             };
         },'/tr', Server.default.addr);
         jumpTask = DynamicTask.new(clock);
@@ -118,14 +116,12 @@ DJdeck : Object {
         if(clock.paused){ // we only load a track if no track is allready playing
             if(track.title.isNil.not){ this.reset }; // reset the deck if not done so yet
             track = newTrack;
-            scratchEventNumber = 0;
-            trackTempo = track.bpm/60;
-            if(clock.sync.not){ clock.tempoInterface_(trackTempo) }; // play track at normal rate if not synced
+            if(clock.sync.not){ clock.tempoInterface_((track.bpm/60)) }; // play track at normal rate if not synced
             //setpointGridOffset = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
-            clock.beats = this.position2beat(0);
+            clock.beats(this.position2beat(0));
             // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
             buffer = track.loadBuffer(action: { trackBufferReady = true; this.reactivateSynth; action.value });
-            synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
+            synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadTrack: \t"++track.artist++", "++track.title).log(this);
             this.endOfTrackSched; // this paused the track when reaching the end
             ^true;
@@ -140,16 +136,14 @@ DJdeck : Object {
         if(clock.paused){ // we only load a track if no track is allready playing
             if(track.title.isNil.not){ this.reset }; // reset the deck if not done so yet
             track = djDeck.track;
-            scratchEventNumber = 0;
-            trackTempo = track.bpm/60;
             //setpointGridOffset = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
             if(djDeck.clock.sync){ clock.activateSync(djDeck.clock.master) }{ clock.deactiveSync; clock.tempoInterface_(djDeck.clock.tempoInterface) }; // make sure the decks are synchronized in tempo
-            clock.beats = djDeck.clock.beats; // we sync the beats, because we want it to play perfectly synced
+            clock.beats_(djDeck.clock.beats); // we sync the beats, because we want it to play perfectly synced
             // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
             buffer = djDeck.buffer;
             trackBufferReady = true;
             this.reactivateSynth;
-            synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
+            synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadDouble: \t"++track.artist++", "++track.title).log(this);
             this.endOfTrackSched;
             ^true;
@@ -163,18 +157,16 @@ DJdeck : Object {
         if(clock.paused){ // we only load a track if no track is allready playing
             if(track.title.isNil.not){ this.reset }; // reset the deck if not done so yet
             track = newTrack;
-            scratchEventNumber = 0;
-            trackTempo = track.bpm/60;
-            if(clock.sync.not){ clock.tempoInterface_(trackTempo) }; // play track at normal rate if not synced
+            if(clock.sync.not){ clock.tempoInterface_((track.bpm/60)) }; // play track at normal rate if not synced
             //setpointGridOffset = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
-            clock.beats = this.position2beat(0);
-            // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
+            clock.beats_(this.position2beat(0));
             buffer = newBuffer;
             trackBufferReady = true;
             this.reactivateSynth;
-            synth.set(\trackTempo, trackTempo, \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
+            synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadTrack: \t"++track.artist++", "++track.title).log(this);
             this.endOfTrackSched;
+            
             ^true;
         }{
             (deckNr.asString++", track is still playing").log(this);
@@ -298,7 +290,6 @@ DJdeck : Object {
 
     scratch_ { |intensity = 1|
         if(clock.paused){ //K2A.ar(scratchEventNumber * BufSampleRate.kr(bufnum) * 2 / 180);
-            intensity.postln;
             scratchEventNumber = scratchEventNumber + (track.sampleRate * 2 / 180 * intensity); // from MidiOX analysis it becomes apparent that the platter gives 180 pulses if turned slowly, which are being grouped together iw they are spaced within 25ms
             synth.set(\scratchEventNumber, scratchEventNumber);
         }
@@ -306,7 +297,7 @@ DJdeck : Object {
 
     needledropping_ { |relativePosition|
         var jumpToBeat;
-        jumpToBeat = (track.duration * relativePosition * trackTempo).round;
+        jumpToBeat = (track.duration * relativePosition * (track.bpm/60)).round;
         clock.beats_(jumpToBeat); // should go passed the end of the track
         this.changed(\needledropping);
     }
@@ -316,7 +307,7 @@ DJdeck : Object {
     }
 
     relativePosition {
-        ^(clock.beats / (track.duration * trackTempo));
+        ^(clock.beats / (track.duration * (track.bpm/60)));
     }
 
     beatJumpNow { |beats|
@@ -331,11 +322,11 @@ DJdeck : Object {
         }
     }
 
-    // backend: loop
+    // frontend: loop
     loop_ { |bool|
         if(bool){
+            loop = true;
             if(jumpTask.cancel){
-                loop = true;
                 this.beatJumpScheduled; // if we are not allready beatjumping, we active the beatJumping; in scheduleJump we check whether we have not yet allready scheduled something
             };
         }{
@@ -348,9 +339,17 @@ DJdeck : Object {
     loopTableIndex_ { |val| 
         // TODO: change approach: work with a lookup table
         // direction should be a bool true = increase loopSize, false = decrease loopSize
+        var previousBeatJumpBeats;
         loopTableIndex = val.clip(0,loopTable.size-1);
+        previousBeatJumpBeats = beatJumpBeats;
         beatJumpBeats = loopTable[loopTableIndex];
         if(beatJumpBeats == 1.0){ clock.phaseSync }; // if we come from a loop smaller than a beat, we make sure we phasesync to the master again, now our beats line up nicely (:
+
+        // front looping (see ppt), we also need to alter the point at which we jump
+        if(loop){ 
+            jumpAtBeat = jumpTask.schedAtTime + previousBeatJumpBeats - beatJumpBeats;
+            jumpTask.schedAbs(jumpAtBeat); 
+        };
     }
 
     loopSize {
@@ -379,11 +378,11 @@ DJdeck : Object {
 
     // backend: conversion
     beat2time { |beat|
-        ^(beat / trackTempo) + track.userInducedGridOffset
+        ^(beat / (track.bpm/60)) + track.userInducedGridOffset
     }
 
     time2beat { |time|
-        ^(time - track.userInducedGridOffset) * trackTempo;
+        ^(time - track.userInducedGridOffset) * (track.bpm/60);
     }
 
     time2position { |time|
@@ -411,9 +410,9 @@ DJdeck : Object {
         }{
             beatNew = beatOld.floor + beatNew.frac;
         };
-        tempGridOffset = (beatOld - beatNew) / trackTempo + track.userInducedGridOffset;
+        tempGridOffset = ((beatOld - beatNew) / (track.bpm/60)) + track.userInducedGridOffset;
         if(tempGridOffset < 0){ // if so, we should decrease the newBeat value by one, such that the grid moves to the right
-            tempGridOffset = (beatOld - beatNew + 1) / trackTempo + track.userInducedGridOffset;
+            tempGridOffset = ((beatOld - beatNew + 1) / (track.bpm/60)) + track.userInducedGridOffset;
         };
         ^tempGridOffset;
     }
@@ -421,7 +420,10 @@ DJdeck : Object {
     // backend: alignment
     align {
         // align buffer playback position and trackclock (they get out of sync due to pitchshifting, and scratching), by setting the clock to the actual playback position
-        clock.beatsNoJump_(this.position2beat(referenceBus.getSynchronous));
+        var position, referencePosition, positionNotClipped;
+        # position, referencePosition, positionNotClipped = referenceBus.getnSynchronous(3);
+        clock.beatsNoJump_(this.position2beat(positionNotClipped));
+        (deckNr.asString++", trackClock aligned").log(this);
     }
 
     userInducedGridOffset_ { |value|
@@ -437,13 +439,13 @@ DJdeck : Object {
     // backend: beatJumping 
     beatJumpScheduled { |beats, quant|
         // scheduled and quatized jump
-        var func, q, jumpAtBeat, goTo;
+        var func, q, goTo;
         if(beats.isNil.not){ beatJumpBeats = beats };
         q = quant ? beatJumpBeats; 
         q = q.abs;
-        jumpAtBeat = q*(clock.beats/q).ceil;
+        jumpAtBeat = q*((clock.beats/q).floor + 1);
         //beatJumpBeats = beats.asInteger; // will be looked up at moment of jump by schedule jump (can be changed in the meantime)
-        this.scheduleJump(jumpAtBeat);
+        this.scheduleJump;
     }
 
     beatJumpQuantized { |beats, quant|
@@ -462,7 +464,7 @@ DJdeck : Object {
         }
     }
 
-    scheduleJump { |jumpAtBeat|
+    scheduleJump {
         if(jumpTask.cancel && (jumpAtBeat <= this.time2beat(track.duration))){
             jumpTask.target_({
                 clock.beats_((clock.beats + beatJumpBeats)); // we modify the clock's beats, the track follows via the .update callback
@@ -487,14 +489,9 @@ DJdeck : Object {
         // let the clock jump to a specific beat and make sure track follows; this function is called via .update; the clock is leading
         var position;
         position = this.beat2position(beat);
-        if(position >= 0){ 
-            this.jumpToPosition(position);
-        }{ // if the position is lower than zero, there is nothing in the buffer to play, so we pause the synth temporarily, and activate when we arrive at the start of the file
-            pauseBus.setSynchronous(1);
-            //synth.run(false); // alternatively we instead could define a paused argument for the synth; if this is high, then the rate will be set to zero
-            this.jumpToPosition(0);            
-            clock.schedAbs(this.position2beat(0), {pauseBus.setSynchronous(0) });
-        }
+        scratchEventNumber = 0;
+        synth.set(\scratchEventNumber, scratchEventNumber);
+        this.jumpToPosition(position);
     }
 
     jumpToPosition { |position|
@@ -514,6 +511,9 @@ DJdeck : Object {
         if(buffer.dependants.size == 1){ buffer.free }{ buffer.removeDependant(this) }; // only free the buffer if I am the only dependant; see the .schelp for more thoughts on this
         this.loop_(false);
         this.loopTableIndex_(9);
+        quePoint = 0;
+        scratchEventNumber = 0;
+        referenceBus.setnSynchronous([0, 0, 0]);
         //track.userInducedGridOffset = setpointGridOffset; // store userInducedGridOffset in the track
     }
 
@@ -529,17 +529,31 @@ DJdeck : Object {
     }
 
     endOfTrackSched {
+        // TODO should be implemented using DynamicTask, because should be changed upon loading a new track, since new track has different end point
+        // currently disabled because not needed
         // when reaching the end of the track: pause (should be conditionally rescheduled every time we press play)
-        clock.schedAbs(this.time2beat(track.duration), {
-            endOfTrackEvent = true;
-            "endOfTrackEvent".log(this);
-            // this.pause;
-        });
-        endOfTrackEvent = false; // we have taken action upon the endOfTrackEvent, so we can now reset it
+        //clock.schedAbs(this.time2beat(track.duration), {
+        //    endOfTrackEvent = true;
+        //    "endOfTrackEvent".log(this);
+        //    // this.pause;
+        //});
+        //endOfTrackEvent = false; // we have taken action upon the endOfTrackEvent, so we can now reset it
     }
 
     spawnSynths { |target, addAction|
-        synth = Synth.newPaused("DJdeck", [\outputBus, bus, \bufnum, buffer, \deckTempoBus, clock.bus, \trackTempo, trackTempo, \referenceBus, referenceBus, \positionSetBus, positionSetBus, \playerSelectionBus, playerSelectionBus, \pauseBus, pauseBus], target, addAction);
+        synth = Synth.newPaused("DJdeck", [\outputBus, bus, \bufnum, buffer, \deckTempoBus, clock.bus, \trackTempo, track.bpm/60, \referenceBus, referenceBus, \positionSetBus, positionSetBus, \playerSelectionBus, playerSelectionBus], target, addAction);
+    }
+
+    info {
+        "\tPlaying:\t%\n".postf(clock.paused.not);
+        "\tSync:\t%\n".postf(clock.sync);
+        "\tBPM:\t%\n".postf(clock.tempo * 60);
+        "\tBeat:\t%\n".postf(clock.beats);
+        "\tTime:\t%\n".postf(this.beat2time(clock.beats));
+        "\tDuration:\t%\n".postf(track.duration);
+        "\tBeatJumpBeats:\t%\n".postf(beatJumpBeats);
+        "\tJumpAtBeat:\t%\n".postf(jumpAtBeat);
+        "\n".postf();
     }
 
     update { |theChanged, theChanger|
@@ -556,7 +570,6 @@ DJdeck : Object {
             };
         };
         if(theChanger == \sync){
-            "djdeck".postln;
             this.changed(\sync);
         };
         if(theChanger == \playPause){
@@ -583,21 +596,21 @@ DJdeck : Object {
         Class.initClassTree(DeckPlayer);
 
         // synthdef itself
-        SynthDef(\DJdeck, { |bufnum, outputBus = 0, referenceBufnum, referenceBus, mute = 0, positionSetBus, playerSelectionBus, trackTempo, deckTempoBus, bendEvent, bendIntensity, pauseBus, gain, scratchEventNumber, scratchIntensity, scopeBusKr, scopeBusAr|
-            var rate, rateBended, trig, output, positionInputIn, positionInput, position, blockPosition, referencePosition, blockReferencePosition, playerSelectionIn, playerSelection;
+        SynthDef(\DJdeck, { |bufnum, outputBus = 0, referenceBufnum, referenceBus, mute = 0, positionSetBus, playerSelectionBus, trackTempo, deckTempoBus, bendEvent, bendIntensity, gain, scratchEventNumber, scratchIntensity, scopeBusKr, scopeBusAr|
+            var rate, rateBended, trig, output, positionInputIn, positionInput, position, positionNotClipped, blockPosition, referencePosition, blockReferencePosition, playerSelectionIn, playerSelection;
             var bendTrig, bend;
-            var outputBundledP1, outputP1, positionP1, referencePositionP1;
-            var outputBundledP2, outputP2, positionP2, referencePositionP2;
-            var scratchTrig, scratchEvent, scratchEstimatedTime, scratchPosition, scratchPositionFiltered, targetScratchPosition, previousScratchPosition, scratchRate;
+            var outputBundledP1, outputP1, positionP1, positionNotClippedP1, referencePositionP1;
+            var outputBundledP2, outputP2, positionP2, positionNotClippedP2, referencePositionP2;
+            var scratchTrig, scratchEvent, scratchEstimatedTime, scratchPosition, scratchPositionFiltered, targetScratchPosition, previousScratchPosition, scratchRate, resetScratch;
             var trackClockTrig;
 
             // pitch bending
             bendTrig = Changed.kr(bendEvent);
             bend = bendTrig * bendIntensity;
-            bend = Lag.kr(bend, 0.4);
+            bend = Lag.kr(bend, 0.25);
 
             // rate
-            rate =  In.kr(deckTempoBus) / trackTempo * (1 - In.kr(pauseBus)); // if it is paused the rate will be zero; paused is to be used only for when the beat is negative, meaning we are before the track, so we need to wait with playing the track untill we arrive at the start of the track
+            rate = In.kr(deckTempoBus) / trackTempo;
             rateBended = rate + bend;
 
             // jumping
@@ -610,21 +623,25 @@ DJdeck : Object {
             scratchEstimatedTime = 0.025; 
             previousScratchPosition = LocalIn.ar();
             scratchRate = Latch.ar((targetScratchPosition - previousScratchPosition).abs / scratchEstimatedTime, K2A.ar(scratchTrig));
+            resetScratch = InRange.ar(targetScratchPosition, -0.5, 0.5);
+            scratchRate = (resetScratch * 100000000000) + ((1 - resetScratch) * scratchRate);
+            //scratchRate = Select.ar(LFSaw.ar(1.0,0.0,1,1), [scratchRate, 100000000000]); // if targetScratchPosition = 0, then set scratchRate to inf, in order te reach immediate, as a means of resetting upon beat jumping
             scratchPosition = Slew.ar(targetScratchPosition, scratchRate, scratchRate);
             scratchPositionFiltered = Lag.ar(in: scratchPosition, lagTime: 0.1);
             LocalOut.ar(scratchPosition);
 
             // tell language to sync trackClock
-            trackClockTrig = Sweep.kr(bendTrig + scratchTrig, rate: 1.0) > 0.5; // if more than 0.5s no bend or scratch, then align clock, see OSC listener as defined in init
+            trackClockTrig = Sweep.kr(bendTrig + (scratchTrig * (1 - resetScratch)), rate: 1.0) > 0.25; // if more than 0.5s no bend or scratch, then align clock, see OSC listener as defined in init
             SendTrig.kr(trackClockTrig);
 
             // players
-            # outputP1, positionP1, referencePositionP1 = DeckPlayer.ar(playerSelection, bufnum, positionInput, rate, rateBended, scratchPositionFiltered);
-            # outputP2, positionP2, referencePositionP2 = DeckPlayer.ar((1 - playerSelection), bufnum, positionInput, rate, rateBended, scratchPositionFiltered);
+            # outputP1, positionP1, positionNotClippedP1, referencePositionP1 = DeckPlayer.ar(playerSelection, bufnum, positionInput, rate, rateBended, scratchPositionFiltered);
+            # outputP2, positionP2, positionNotClippedP2, referencePositionP2 = DeckPlayer.ar((1 - playerSelection), bufnum, positionInput, rate, rateBended, scratchPositionFiltered);
 
             // player addition
             output = outputP1 + outputP2; // fading is integrated in the players themselves
             position = (playerSelection * positionP1) + ((1 - playerSelection) * positionP2); // select position in accordance with the selected player
+            positionNotClipped = (playerSelection * positionNotClippedP1) + ((1 - playerSelection) * positionNotClippedP2);
             referencePosition = (playerSelection * referencePositionP1) + ((1 - playerSelection) * referencePositionP2);
 
             // output
@@ -633,7 +650,7 @@ DJdeck : Object {
             Out.ar(outputBus, output);
 
             // for reference
-            Out.kr(referenceBus, [A2Kcentered.kr(position), referencePosition]);
+            Out.kr(referenceBus, [A2Kcentered.kr(position), referencePosition, positionNotClipped]);
         }).writeDefFile;
     }
 
@@ -683,7 +700,7 @@ DJdeck : Object {
 
 DeckPlayer {
     *ar { |gate, bufnum, positionOffset, rate, rateBended, scratchPosition|
-            var env, trig, position, positionOffsetLatched, referencePosition, output;
+            var env, trig, position, positionNotClipped, positionOffsetLatched, referencePosition, output;
 
             // trigger
             //trig = T2A.ar(PositiveEdge.kr(gate));
@@ -691,8 +708,8 @@ DeckPlayer {
 
             // position
             positionOffsetLatched = Latch.ar(positionOffset, trig); // we only set the positionOffset upon switching to this player
-            position = positionOffsetLatched + (BufSampleRate.kr(bufnum) * Sweep.ar(trig, rateBended)) + scratchPosition; //12-02  not sure why this works, since the sweep is never resetted (this is not possible)
-            position = Clip.ar(position, 0, BufFrames.kr(bufnum)); 
+            positionNotClipped = positionOffsetLatched + (BufSampleRate.kr(bufnum) * Sweep.ar(trig, rateBended)) + scratchPosition; //12-02  not sure why this works, since the sweep is never resetted (this is not possible)
+            position = Clip.ar(positionNotClipped, 0, BufFrames.kr(bufnum)); 
             referencePosition = positionOffsetLatched + (BufSampleRate.kr(bufnum)* Sweep.ar(trig, rate));
 
             // actual soundfile reading
@@ -703,6 +720,6 @@ DeckPlayer {
             output = output * Linen.kr(gate, attackTime: 0.05, releaseTime: 0.05);
 
             // return
-            ^[output, position, referencePosition];
+            ^[output, position, positionNotClipped, referencePosition];
     }
 }

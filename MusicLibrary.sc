@@ -456,6 +456,7 @@ TrackDescription : SoundFile {
         "\tBPM:\t%\n".postf( this.bpm );
         "\tKey:\t% % \tFifthScore: \t%\n".postf( this.key.rootNote, this.key.scale.name, this.key.fifthScore(this.key.rootNote) );
         "\tLength:\t%\n".postf(this.duration);
+        "\tPerceivedDb:\t%\n".postf(this.preceivedDb);
         "\n".postf();
     }
 

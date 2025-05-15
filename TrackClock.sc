@@ -166,8 +166,8 @@ TrackClock : TempoClock {
             master = master_; // we store it such that there is no confusion to whom we are being synced; hence we can easily desync
         };
         master.addDependant(this);
-        this.tempo_(master.tempo);
-        if(paused.not){ this.phaseSync }; // we will phase sync when hitting .resume in case we are paused
+        if(paused){ fallbackTempo = master.tempo; }{ this.tempo_(master.tempo); this.phaseSync }; // we will phase sync when hitting .resume in case we are paused
+        if(paused.not)
     }
 
     deactiveSync {

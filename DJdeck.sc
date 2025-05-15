@@ -138,10 +138,10 @@ DJdeck : Object {
             track = djDeck.track;
             //setpointGridOffset = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
             if(djDeck.clock.sync){ clock.activateSync(djDeck.clock.master) }{ clock.deactiveSync; clock.tempoInterface_(djDeck.clock.tempoInterface) }; // make sure the decks are synchronized in tempo
-            clock.beats_(djDeck.clock.beats); // we sync the beats, because we want it to play perfectly synced
-            // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
             buffer = djDeck.buffer;
             trackBufferReady = true;
+            if(djDeck.playPause){ this.play };
+            clock.beats_(djDeck.clock.beats); // we sync the beats, because we want it to play perfectly synced
             this.reactivateSynth;
             synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadDouble: \t"++track.artist++", "++track.title).log(this);

@@ -78,8 +78,11 @@ LibraryConsole {
         ^activeTrackArrayFiltered.size;
     }
 
-    setReferenceTrack {
-        referenceTrack = prelistenDeck.track;
+    setReferenceTrack { |track|
+        referenceTrack = track ? prelistenDeck.track;
+        this.filter;
+        this.installPlaylist;
+        this.nextTrack_;
     }
 
     oldnextTrack_ { |direction = true|
@@ -156,9 +159,7 @@ LibraryConsole {
         // something calls this method from somewhere, but I don't understand where; but if I delete it I run into an error
     }
 
-    referenceTrack_ { |track|
-        referenceTrack = track;
-        this.filter;
-        this.installPlaylist;
+    reset {
+        this.setReferenceTrack;
     }
 }

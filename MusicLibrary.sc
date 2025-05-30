@@ -17,7 +17,7 @@ MusicLibrary {
         ^Object.readTextArchive(path);
     }
 
-    *loadFromTraktor{ |libraryPath, traktorLibraryPath, forceLoad = false|
+    *loadFromTraktor{ |libraryPath, musicLibraryCustomPartPath, traktorLibraryPath, forceLoad = false|
         // load the archived library and update it from the Traktor collection if needed, if no archive exists, create new library from scratch from the Traktor collection
         var instance, tracksOld;
         if(File.exists(libraryPath) && forceLoad.not){
@@ -44,6 +44,7 @@ MusicLibrary {
             instance = this.newFromTraktor(traktorLibraryPath);
         };
         instance.playlists.leafDo({ |path, item| if(item.class == Smartlist || item.class == PseudoPlaylist){ item.selectTracks }} ); // we make sure we have up to date tracklist for automatically generated playlists
+        instance.playlists.put("$ROOT".asSymbol, \Custom, musicLibraryCustomPartPath.load);
         instance.barcodeDictionary_;
         ^instance;
     }
@@ -207,6 +208,10 @@ MusicLibrary {
     store { |path|
         this.writeArchive(path);
     }
+
+    storeCustom { |path|
+        this.playlists.at("$ROOT".asSymbol, \Custom).writeArchive(path);
+    }
 }
 
 AbstractPlaylist {
@@ -235,6 +240,28 @@ AbstractPlaylist {
     randomTrack { 
         ^Library.at(\musicLibrary).tracks[trackKeyArray.rand];
     }
+
+    addTrack { |track|
+        trackKeyArray = trackKeyArray ++ track.path.asSymbol;
+    }
+
+    installCustom {
+        // convenience method
+         ^Library.at(\musicLibrary).playlists.put("$ROOT".asSymbol, \Custom, this.name.asSymbol, this);
+    }
+
+    post {
+        "Playlist %\n".postf(name);
+        "Index\tArtist\tTitle\n".postf;
+        for(0, trackKeyArray.size - 1){ |i|
+            var track = Library.at(\musicLibrary).tracks.at(trackKeyArray[i]);
+            "%\t%\t%\n".postf(i, track.artist, track.title);
+        };
+    }
+
+    deleteTrack { |index|
+        trackKeyArray.removeAt(index);
+    }
 }
 
 Playlist : AbstractPlaylist {
@@ -247,7 +274,7 @@ Playlist : AbstractPlaylist {
     }
 
     init { |trackKeyArray_|
-        trackKeyArray = trackKeyArray_;
+        trackKeyArray = trackKeyArray_ ? Array.newClear;
     }
 
     initFromTraktor { |playlistString|

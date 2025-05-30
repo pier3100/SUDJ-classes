@@ -114,7 +114,7 @@ DJdeck : Object {
     // frontend: tracks
     loadTrack { |newTrack, action|
         if(clock.paused){ // we only load a track if no track is allready playing
-            if(track.title.isNil.not){ this.reset }; // reset the deck if not done so yet
+            if(track.isNil){ this.reset }{if(track.title.isNil.not){ this.reset }}; // reset the deck if not done so yet
             track = newTrack;
             if(clock.sync.not){ clock.tempoInterface_((track.bpm/60)) }; // play track at normal rate if not synced
             //setpointGridOffset = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset

@@ -5,6 +5,15 @@
 }
 
 + String {
+    /* asCompileString {
+        ^this.replace('\\','\\\\');
+    }
+
+    asCompileStringCallPrimitive {
+        _String_AsCompileString
+		^this.primitiveFailed
+    } */
+
     formatPlain {
         ^this.replace("&amp;","&");
     }
@@ -43,5 +52,16 @@
 + Nil {
     formatPlain {
         ^this;
+    }
+}
+
++ Symbol {
+    asCompileString {
+        ^this.asString.replace("\\","\\\\").asSymbol.asCompileStringCallPrimitive;
+    }
+
+    asCompileStringCallPrimitive {
+        _ObjectCompileString
+		^String.streamContents({ arg stream; this.storeOn(stream); });
     }
 }

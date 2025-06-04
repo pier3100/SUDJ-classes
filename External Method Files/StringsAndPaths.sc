@@ -57,7 +57,7 @@
 
 + Symbol {
     asCompileString {
-        ^this.asString.replace("\\","\\\\").asSymbol.asCompileStringCallPrimitive;
+        ^this.asString.replace("\\","\\\\").replace("\'", "\\'").asSymbol.asCompileStringCallPrimitive;
     }
 
     asCompileStringCallPrimitive {

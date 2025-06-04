@@ -24,9 +24,9 @@ MusicLibrary {
             // reusing existing library is broken; but it is also redundant is reloading from scratch is considerably faster
             instance = this.load(libraryPath);
             // apparently there is a bug in supercollider in loading the track dictionary; which we can circumvent if we overwrite it
-            tracksOld = instance.tracks;
-            instance.tracks = Library.new(tracksOld.size);
-            tracksOld.keysValuesDo({|key, value| instance.tracks.put(key,value)});
+            //tracksOld = instance.tracks;
+            //instance.tracks = Library.new(tracksOld.size);
+            //tracksOld.keysValuesDo({|key, value| instance.tracks.put(key,value)});
 
             if(File.mtime(traktorLibraryPath) > File.mtime(libraryPath)){ // if traktor has recently updated the collection, we need to update our collection as well
                 var collectionText;
@@ -415,14 +415,17 @@ Key {
 
 TrackDescription : SoundFile {
     //make a child from SoundFile
-    var <usable = true, <title, <artist, <key, <bpm, <gridOffset, <>userInducedGridOffset, <id, <preceivedDb;
+    var <usable = true, <title, <artist, <key, <bpm, <gridOffset, <>userInducedGridOffset, <id, <preceivedDb, <energy, <dateAdded;
 
     *newDummy { |bpm, keyNumber|
         ^super.openRead(Platform.resourceDir +/+ "sounds/a11wlk01.wav").init(bpm, keyNumber);
     }
 
     *newFromTraktor { |string|
-        ^super.new.fromTraktor(string);
+        var instance; 
+        instance = super.new.fromTraktor(string);
+        //instance.readMetaData;
+        ^instance;
     }
 
     init { |bpm_, keyNumber_|
@@ -443,6 +446,8 @@ TrackDescription : SoundFile {
         id = string.lookup("AUDIO_ID");
         preceivedDb = string.lookup("PERCEIVED_DB");
         if(preceivedDb.isNil){ usable = false }{ preceivedDb = preceivedDb.asFloat };
+        energy = string.lookup("LABEL");
+        dateAdded = string.lookup("IMPORT_DATE").replace("\/");
         ^this;
     }
 
@@ -475,6 +480,23 @@ TrackDescription : SoundFile {
 
     keyAtBPM { |playBPM|
         ^key.switched(playBPM/bpm);
+    }
+
+    readMetaData {
+        this.energyFromMetaData;
+    }
+
+    energyFromMetaData { 
+        var command;
+        if(path.extension == "ogg"){
+            command = "ffprobe -v quiet -print_format json -show_entries stream_tags=ORGANIZATION \"" ++ path + "\"";
+            energy = command.unixCmdGetStdOut.findInBetween("ORGANIZATION\": \"", "\"").string;
+        };
+        if(path.extension == "mp3"){
+            command = "ffprobe -v quiet -print_format json -show_entries format_tags=publisher \"" ++ path + "\"";
+            energy = command.unixCmdGetStdOut.findInBetween("publisher\": \"", "\"").string;
+        };
+        ^energy;
     }
 
     postInfo {
@@ -582,6 +604,14 @@ Substring {
         if(multiplier == 2){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm / 2) >= lowBound) && ((item.bpm / 2) <= upBound)) }) };
         //if(multiplier == 4){ indices = indices ++ this.selectIndices({ |item, i| (((item.bpm * 4) >= lowBound) && ((item.bpm * 4) <= upBound)) || (((item.bpm / 4) >= lowBound) && ((item.bpm / 4) <= upBound)) }) };
         ^this.at(indices.asSet.asArray);
+    }
+
+    filterEnergy { |energy|
+        if(energy.isNil){
+            ^this;
+        }{
+            ^this.select({ |item| item.energy == energy });
+        };
     }
 
     rand {

@@ -331,7 +331,7 @@ PseudoPlaylist : AbstractPlaylist {
 }
 
 Smartlist : AbstractPlaylist {
-    // a playlist which is formed by selecting all tracks which abide the ruleFunction
+    // a playlist which is formed by selecting all tracks which abide the ruleFunction; it is only updated upon request; so you can add tracks manually afterwards
     var <>ruleFunction;
 
     *new { |name_, ruleFunction_, uuId_| 

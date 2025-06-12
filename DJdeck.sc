@@ -118,7 +118,7 @@ DJdeck : Object {
             track = newTrack;
             if(clock.sync.not){ clock.tempoInterface_((track.bpm/60)) }; // play track at normal rate if not synced
             //setpointGridOffset = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
-            clock.beats(this.position2beat(0));
+            clock.beats_(this.position2beat(0));
             // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
             buffer = track.loadBuffer(action: { trackBufferReady = true; this.reactivateSynth; action.value });
             synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
@@ -142,6 +142,26 @@ DJdeck : Object {
             trackBufferReady = true;
             if(djDeck.playPause){ this.play };
             clock.beats_(djDeck.clock.beats); // we sync the beats, because we want it to play perfectly synced
+            this.reactivateSynth;
+            synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
+            (deckNr.asString++", loadDouble: \t"++track.artist++", "++track.title).log(this);
+            this.endOfTrackSched;
+            ^true;
+        }{
+            (deckNr.asString++", track is still playing").log(this);
+            ^false;
+        }
+    }    
+
+    loadCopy { |djDeck| //not working yet
+        // should double the song allready playing on the deck, this is also the way we load songs: we copy them from the prelistenDeck
+        if(clock.paused){ // we only load a track if no track is allready playing
+            if(track.title.isNil.not){ this.reset }; // reset the deck if not done so yet
+            track = djDeck.track;
+            //setpointGridOffset = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
+            buffer = djDeck.buffer;
+            trackBufferReady = true;
+            clock.beats_(0); 
             this.reactivateSynth;
             synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadDouble: \t"++track.artist++", "++track.title).log(this);
@@ -347,7 +367,7 @@ DJdeck : Object {
 
         // front looping (see ppt), we also need to alter the point at which we jump
         if(loop){ 
-            jumpAtBeat = jumpTask.schedAtTime + previousBeatJumpBeats - beatJumpBeats;
+            this.jumpAtBeat_;
             jumpTask.schedAbs(jumpAtBeat); 
         };
     }
@@ -437,14 +457,16 @@ DJdeck : Object {
     }
 
     // backend: beatJumping 
-    beatJumpScheduled { |beats, quant|
-        // scheduled and quatized jump
-        var func, q, goTo;
+    jumpAtBeat_ { |beats, quant|
+        var q;
         if(beats.isNil.not){ beatJumpBeats = beats };
         q = quant ? beatJumpBeats; 
         q = q.abs;
         jumpAtBeat = q*((clock.beats/q).floor + 1);
-        //beatJumpBeats = beats.asInteger; // will be looked up at moment of jump by schedule jump (can be changed in the meantime)
+    }    
+    beatJumpScheduled { |beats, quant|
+        // scheduled and quatized jump
+        this.jumpAtBeat_(beats, quant);
         this.scheduleJump;
     }
 
@@ -546,6 +568,7 @@ DJdeck : Object {
 
     info {
         "\tPlaying:\t%\n".postf(clock.paused.not);
+        "\tLooping:\t%\n".postf(loop);
         "\tSync:\t%\n".postf(clock.sync);
         "\tBPM:\t%\n".postf(clock.tempo * 60);
         "\tBeat:\t%\n".postf(clock.beats);

@@ -214,7 +214,7 @@ MidiSystem : MidiHidSystemTemplate {
 
     *initMidi { |midiFeedbackFreq = 2|
         MIDIClient.initialized.not.if{ MIDIClient.init };
-        MIDIIn.connectAll;
+        //MIDIIn.connectAll;
         
         plcMidiFeedback = PLC.new(midiFeedbackFreq);
         
@@ -567,6 +567,7 @@ MidiInOutPair : Object {
 		indexIn = indexIn_;
 		indexOut = indexOut_;
         nameInput = if(indexIn.isNil){ "dummy" }{ MIDIClient.sources[indexIn].name }; //support for dummy's if input is not found
+        indexIn !? { MIDIIn.connect(indexIn,indexIn)};
 		indexOut !? {
             nameOutput = MIDIClient.destinations[indexOut].name;
             midiOut = MIDIOut(indexOut);

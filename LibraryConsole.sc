@@ -105,7 +105,6 @@ LibraryConsole {
         referenceTrack = track ? prelistenDeck.track;
         this.filter;
         this.installPlaylist;
-        this.nextTrack_;
     }
 
     oldnextTrack_ { |direction = true|
@@ -129,11 +128,13 @@ LibraryConsole {
                 if(tempCount <= (activeTrackArrayFilteredOrdered.size - 1)){
                     // we restrict our selves to the size of the array
                     count = tempCount;
+                    bufferArray[0].dismiss(this);
                     for(0,3){ |i|
                         bufferArray[i] = bufferArray[i + 1];
                     };
                     if(count + 2 <= (activeTrackArrayFilteredOrdered.size - 1)){
                         bufferArray[4] = activeTrackArrayFilteredOrdered[count + 2].loadBuffer;
+                        bufferArray[4].addDependant(this);
                     };
                 }
             }{ 
@@ -141,11 +142,13 @@ LibraryConsole {
                 if(tempCount >= 0){
                     // we restrict our selves to the size of the array
                     count = tempCount;
+                    bufferArray[4].dismiss(this);
                     for(4,1){ |i|
                         bufferArray[i] = bufferArray[i - 1];
                     };
                     if(count - 2 >= 0){
                         bufferArray[0] = activeTrackArrayFilteredOrdered[count - 2].loadBuffer;
+                        bufferArray[0].addDependant(this);
                     };
                 };
             };
@@ -164,14 +167,24 @@ LibraryConsole {
             { 2 } { activeTrackArrayFilteredOrdered = activeTrackArrayFiltered.scramble};
 
         
-        count = -1;
+        count = 0;
         "filtered playlist contains % tracks".format(activeTrackArrayFilteredOrdered.size).log(this);
         if(activeTrackArrayFilteredOrdered.isEmpty.not){
-            // we initialize the buffer array for this playlist, we keep the first three (0, 1, 2) empty, because these are use for the previous tweo tracks, and we fill the third one upon calling the first nextTrack, so we only fill spot 3,4
-            bufferArray[3] = activeTrackArrayFilteredOrdered[0].loadBuffer; 
+            // we initialize the buffer array for this playlist, we keep the first two (0, 1) empty, because these are use for the previous tweo track
+            bufferArray[2].dismiss(this);
+            bufferArray[2] = activeTrackArrayFilteredOrdered[0].loadBuffer; 
+            bufferArray[2].addDependant(this);
             if(activeTrackArrayFilteredOrdered.size >= 2){
-                bufferArray[4] = activeTrackArrayFilteredOrdered[1].loadBuffer; 
+                bufferArray[3].dismiss(this);
+                bufferArray[3] = activeTrackArrayFilteredOrdered[1].loadBuffer; 
+                bufferArray[3].addDependant(this);
+                if(activeTrackArrayFilteredOrdered.size >= 3){
+                    bufferArray[4].dismiss(this);
+                    bufferArray[4] = activeTrackArrayFilteredOrdered[2].loadBuffer; 
+                    bufferArray[4].addDependant(this);
+                };
             };
+            prelistenDeck.loadTrackFromBuffer(activeTrackArrayFilteredOrdered[count], bufferArray[2]); // directly load the first track
         };
         this.changed(\numberOfTracks);
     }

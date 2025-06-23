@@ -26,7 +26,7 @@ DynamicTask {
         var currentTime;
         clock !? { clockUsed = clock };
         case
-        { clockUsed.class == TempoClock }{ currentTime = clockUsed.beats; this.schedAbs(currentTime + delta, clockUsed) }
+        { clockUsed.class == TempoClock || clockUsed.class == TrackClock}{ currentTime = clockUsed.beats; this.schedAbs(currentTime + delta, clockUsed) }
         { clockUsed == SystemClock }{ currentTime = clockUsed.seconds; this.schedAbs(currentTime + delta, clockUsed) };
         //{ clockUsed == AppClock }{ clockUsed.sched(delta, this); schedAtTime = clockUsed.seconds + delta }; // time comparison does not work with awake
     }

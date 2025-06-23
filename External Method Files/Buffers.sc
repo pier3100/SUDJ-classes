@@ -23,4 +23,11 @@
         };
         this.getn((checkFrame - chuckSize) * this.numChannels, chuckSize * this.numChannels, recursiveFunc); // recursively get the index upto which the buffer is non-empty; then in the end copy this part of the buffer to the target buffer buf //  multichannel buffers are interleaved into one big buffer, we can just take a bigger chuck
     }
+
+    dismiss { |object|
+        this.removeDependant(object); 
+        if(this.dependants.size == 0){ 
+                this.free;// only free the buffer if nobody is using it
+        };
+    }
 }

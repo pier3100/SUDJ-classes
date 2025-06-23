@@ -87,7 +87,7 @@ TrackClock : TempoClock {
 
     beats_ { |beat|
         if(tempo > 0){ super.beats_(beat) };
-        if(tempo == 0){ beatOfTurning = beat }; 
+        if(tempo == 0){ beatOfTurning = beat; super.beats_(beat) }; 
         if(tempo < 0){ beatOfTurning = beat; backwardClock.beats_(0) };
         this.changed([\beats, beat]); // beat jumping is tricky, as the logical time is kept constant during function calls;
     }
@@ -199,5 +199,13 @@ TrackClock : TempoClock {
                 this.beats_(this.beats.floor + fracMaster + 1);
             }
         }
+    }
+
+    forwardClockBeats {
+        ^super.beats;
+    }
+
+    forwardClockTempo {
+        ^super.tempo;
     }
 }

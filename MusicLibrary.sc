@@ -499,7 +499,7 @@ TrackDescription : SoundFile {
         ^energy;
     }
 
-    postInfo {
+    info {
         "\tTitle:\t%\n".postf( this.title );
         "\tArtist:\t%\n".postf( this.artist );
         "\tBPM:\t%\n".postf( this.bpm );

@@ -81,6 +81,7 @@ DJdeck : Object {
     var <endOfTrackEvent = true; // this makes sure that we prepare for the endOfTrack initially
     var <scratchEventNumber = 0;
     var <oscListener;
+    var <>vb; //verbose
 
     // basic
     *new { |bus, target, addAction = 'addToHead', deckNr|
@@ -121,6 +122,7 @@ DJdeck : Object {
             clock.beats_(this.position2beat(0));
             // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
             buffer = track.loadBuffer(action: { trackBufferReady = true; this.reactivateSynth; action.value });
+            buffer.addDependant(this);
             synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadTrack: \t"++track.artist++", "++track.title).log(this);
             this.endOfTrackSched; // this paused the track when reaching the end
@@ -131,14 +133,15 @@ DJdeck : Object {
         }
     }
 
-    loadDouble { |djDeck| //not working yet
+    loadDouble { |djDeck|
         // should double the song allready playing on the deck, this is also the way we load songs: we copy them from the prelistenDeck
         if(clock.paused){ // we only load a track if no track is allready playing
-            if(track.title.isNil.not){ this.reset }; // reset the deck if not done so yet
+            if(track.isNil){ this.reset }{if(track.title.isNil.not){ this.reset }}; // reset the deck if not done so yet
             track = djDeck.track;
             //setpointGridOffset = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
             if(djDeck.clock.sync){ clock.activateSync(djDeck.clock.master) }{ clock.deactiveSync; clock.tempoInterface_(djDeck.clock.tempoInterface) }; // make sure the decks are synchronized in tempo
             buffer = djDeck.buffer;
+            buffer.addDependant(this);
             trackBufferReady = true;
             if(djDeck.playPause){ this.play };
             clock.beats_(djDeck.clock.beats); // we sync the beats, because we want it to play perfectly synced
@@ -153,18 +156,19 @@ DJdeck : Object {
         }
     }    
 
-    loadCopy { |djDeck| //not working yet
-        // should double the song allready playing on the deck, this is also the way we load songs: we copy them from the prelistenDeck
+    loadCopy { |djDeck| 
         if(clock.paused){ // we only load a track if no track is allready playing
-            if(track.title.isNil.not){ this.reset }; // reset the deck if not done so yet
+            if(track.isNil){ this.reset }{if(track.title.isNil.not){ this.reset }}; // reset the deck if not done so yet
             track = djDeck.track;
             //setpointGridOffset = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
+            if(clock.sync.not){ clock.tempoInterface_((track.bpm/60)) }; // play track at normal rate if not synced
             buffer = djDeck.buffer;
+            buffer.addDependant(this);
             trackBufferReady = true;
             clock.beats_(0); 
             this.reactivateSynth;
             synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
-            (deckNr.asString++", loadDouble: \t"++track.artist++", "++track.title).log(this);
+            (deckNr.asString++", loadCopy: \t"++track.artist++", "++track.title).log(this);
             this.endOfTrackSched;
             ^true;
         }{
@@ -175,12 +179,13 @@ DJdeck : Object {
 
     loadTrackFromBuffer{ |newTrack, newBuffer|
         if(clock.paused){ // we only load a track if no track is allready playing
-            if(track.title.isNil.not){ this.reset }; // reset the deck if not done so yet
+            if(track.isNil){ this.reset }{if(track.title.isNil.not){ this.reset }}; // reset the deck if not done so yet
             track = newTrack;
             if(clock.sync.not){ clock.tempoInterface_((track.bpm/60)) }; // play track at normal rate if not synced
             //setpointGridOffset = track.userInducedGridOffset; // get the tracks stored userInducedGridOffset
             clock.beats_(this.position2beat(0));
             buffer = newBuffer;
+            buffer.addDependant(this);
             trackBufferReady = true;
             this.reactivateSynth;
             synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
@@ -272,7 +277,12 @@ DJdeck : Object {
                 this.setQueSnap;
             }
         }{
-            this.jumpToQue;
+            if(loop){
+                this.jumpToBeginLoop;
+            }{
+                this.jumpToQue;
+            };
+            
         }
     }
 
@@ -394,6 +404,11 @@ DJdeck : Object {
     jumpToQue {
         this.pause;
         clock.beats_(quePoint);
+    }
+
+    jumpToBeginLoop {
+        this.pause;
+        clock.beats_(jumpAtBeat + beatJumpBeats);
     }
 
     // backend: conversion
@@ -530,7 +545,7 @@ DJdeck : Object {
         synth.run(false); // if we are not playing any track this synth is not active
         track = TrackDescription.newDummy(125, 6); // placeholder;
         trackBufferReady = false;
-        if(buffer.dependants.size == 1){ buffer.free }{ buffer.removeDependant(this) }; // only free the buffer if I am the only dependant; see the .schelp for more thoughts on this
+        buffer.dismiss(this); 
         this.loop_(false);
         this.loopTableIndex_(9);
         quePoint = 0;

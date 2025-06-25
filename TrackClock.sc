@@ -183,7 +183,7 @@ TrackClock : TempoClock {
         };
         master.dependants.asArray.do({ |item| item.deactiveSync }); // stop all other clocks from syncing to the master including me
         master.tempo = this.tempoInterface; // now sync the master to me at this instance
-        // master.beats = this.beats; LinkClock does not allow precisely setting the beats, if you are using normal TempoClock, you could use this
+        master.beats = this.beats; //LinkClock does not allow precisely setting the beats, if you are using normal TempoClock, you could use this
         this.activateSync; // slave/sync me to the master
     }
 
@@ -192,7 +192,7 @@ TrackClock : TempoClock {
         fracMaster = master.beats.frac;
         fracSlave = this.beats.frac;
         // the following makes sure we will never jump backward in time for the sake of phasesync, but always forward, except if it is not noticeable, that is less than 0.05 sec
-        if((fracMaster - fracSlave).abs > 0.01){ // we only need to phase sync is there is a considerable misalignment
+        if((fracMaster - fracSlave).abs > 0.0001){ // we only need to phase sync is there is a considerable misalignment
             if(fracMaster >= (fracSlave - (0.05 * this.tempo))){
                 this.beats_(this.beats.floor + fracMaster);
             }{

@@ -3,7 +3,7 @@
 - make it possible to to have no filter */
 
 LibraryConsole {
-    var masterClock;
+    var <masterClock;
     var <tempoFilter = 0, <tempoMultiplier = 1, <keyFilter = 0, <minorMajorFilterCoefficient = 0, <energyFilterCoefficient = 0, <order = 0;
     var <>activePlaylist, <activeTrackArrayFiltered, <activeTrackArrayFilteredOrdered, <>prelistenDeck, <referenceTrack, <>count = -1;
     var <bufferArray; 
@@ -125,7 +125,7 @@ LibraryConsole {
         if(activeTrackArrayFilteredOrdered.isEmpty.not){
             if(direction){ 
                 tempCount = count + 1;
-                if(tempCount <= (activeTrackArrayFilteredOrdered.size - 1)){
+                if((tempCount <= (activeTrackArrayFilteredOrdered.size - 1)) && (bufferArray[3].doOnInfo.isNil)){
                     // we restrict our selves to the size of the array
                     count = tempCount;
                     bufferArray[0].dismiss(this);
@@ -133,13 +133,13 @@ LibraryConsole {
                         bufferArray[i] = bufferArray[i + 1];
                     };
                     if(count + 2 <= (activeTrackArrayFilteredOrdered.size - 1)){
-                        bufferArray[4] = activeTrackArrayFilteredOrdered[count + 2].loadBuffer;
+                        bufferArray[4] = activeTrackArrayFilteredOrdered[count + 2].loadBuffer(action: {"buffer loading done".log(this)} );
                         bufferArray[4].addDependant(this);
                     };
                 }
             }{ 
                 tempCount = count - 1;
-                if(tempCount >= 0){
+                if((tempCount >= 0) && (bufferArray[1].doOnInfo.isNil)){
                     // we restrict our selves to the size of the array
                     count = tempCount;
                     bufferArray[4].dismiss(this);
@@ -147,7 +147,7 @@ LibraryConsole {
                         bufferArray[i] = bufferArray[i - 1];
                     };
                     if(count - 2 >= 0){
-                        bufferArray[0] = activeTrackArrayFilteredOrdered[count - 2].loadBuffer;
+                        bufferArray[0] = activeTrackArrayFilteredOrdered[count - 2].loadBuffer(action: {"buffer loading done".log(this)} );
                         bufferArray[0].addDependant(this);
                     };
                 };
@@ -172,15 +172,15 @@ LibraryConsole {
         if(activeTrackArrayFilteredOrdered.isEmpty.not){
             // we initialize the buffer array for this playlist, we keep the first two (0, 1) empty, because these are use for the previous tweo track
             bufferArray[2].dismiss(this);
-            bufferArray[2] = activeTrackArrayFilteredOrdered[0].loadBuffer; 
+            bufferArray[2] = activeTrackArrayFilteredOrdered[0].loadBuffer(action: {"buffer loading done".log(this)} ); 
             bufferArray[2].addDependant(this);
             if(activeTrackArrayFilteredOrdered.size >= 2){
                 bufferArray[3].dismiss(this);
-                bufferArray[3] = activeTrackArrayFilteredOrdered[1].loadBuffer; 
+                bufferArray[3] = activeTrackArrayFilteredOrdered[1].loadBuffer(action: {"buffer loading done".log(this)} ); 
                 bufferArray[3].addDependant(this);
                 if(activeTrackArrayFilteredOrdered.size >= 3){
                     bufferArray[4].dismiss(this);
-                    bufferArray[4] = activeTrackArrayFilteredOrdered[2].loadBuffer; 
+                    bufferArray[4] = activeTrackArrayFilteredOrdered[2].loadBuffer(action: {"buffer loading done".log(this)} ); 
                     bufferArray[4].addDependant(this);
                 };
             };

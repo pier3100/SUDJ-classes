@@ -475,7 +475,7 @@ HidSystem : MidiHidSystemTemplate {
 
     *initHid {
         HID.findAvailable;
-        HID.action_({ |val, valRaw, elementUsage, elementUsagePage, elementId, element deviceId, device|
+        HID.action_({ |val, valRaw, elementUsage, elementUsagePage, elementId, element, deviceId, device|
             instanceList.do({ |item, i|
                 if(item.class.superclass == HidSystem){
                     if(item.source.elementId == elementId && item.source.hidDevice == device){
@@ -505,22 +505,31 @@ HidSystem : MidiHidSystemTemplate {
 }
 
 HidCC : HidSystem {
-    var mode;
-    *new { |source, target, mode = \absolute, active = true|
-        ^super.new.init(source, target, mode, active).add;
+    var mode, invert;
+    *new { |source, target, mode = \absolute, active = true, invert = false|
+        ^super.new.init(source, target, mode, active, invert).add;
     }
 
-    init { |source_, target_, mode_, active_|
+    init { |source_, target_, mode_, active_, invert_|
         source = source_.asHidSource;
         target = target_;
         mode = mode_;
         active = active_;
+        invert = invert_;
+    }
+
+    messageMapping { |val|
+        if(invert){
+            ^1 - val;
+        }{
+            ^val;
+        }
     }
 
     onInput { |val|
         // this will be called upon an incoming message 
         if(active.value(this)){ // only execute if active
-            target.value(val);
+            target.value(this.messageMapping(val));
         }
     }
 }
@@ -575,6 +584,10 @@ MidiInOutPair : Object {
         };
         lightingSkin = lightingSkin_ ? [0, 127]; //standard feedback
 	}
+
+    reConnect {
+        midiOut = MIDIOut(indexOut);
+    }
 
 	isMidiInOutPair { 
 		^true

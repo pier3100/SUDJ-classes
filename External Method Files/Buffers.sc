@@ -30,4 +30,8 @@
                 this.free;// only free the buffer if nobody is using it
         };
     }
+
+    doOnInfo {
+        ^doOnInfo;
+    }
 }

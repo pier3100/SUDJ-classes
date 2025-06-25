@@ -123,7 +123,7 @@ DJdeck : Object {
             // if we have not loaded a track, the synth is paused, so we need to activate the synth after loading
             buffer = track.loadBuffer(action: { trackBufferReady = true; this.reactivateSynth; action.value });
             buffer.addDependant(this);
-            synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
+            synth.set(\trackTempo, (track.bpm/60), \gain, 0.dbamp);//, \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadTrack: \t"++track.artist++", "++track.title).log(this);
             this.endOfTrackSched; // this paused the track when reaching the end
             ^true;
@@ -146,7 +146,7 @@ DJdeck : Object {
             if(djDeck.playPause){ this.play };
             clock.beats_(djDeck.clock.beats); // we sync the beats, because we want it to play perfectly synced
             this.reactivateSynth;
-            synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
+            synth.set(\trackTempo, (track.bpm/60), \gain, 0.dbamp);//, \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadDouble: \t"++track.artist++", "++track.title).log(this);
             this.endOfTrackSched;
             ^true;
@@ -167,7 +167,7 @@ DJdeck : Object {
             trackBufferReady = true;
             clock.beats_(0); 
             this.reactivateSynth;
-            synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
+            synth.set(\trackTempo, (track.bpm/60), \gain, 0.dbamp);//, \gain, track.preceivedDb.neg.dbamp); // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadCopy: \t"++track.artist++", "++track.title).log(this);
             this.endOfTrackSched;
             ^true;
@@ -188,7 +188,7 @@ DJdeck : Object {
             buffer.addDependant(this);
             trackBufferReady = true;
             this.reactivateSynth;
-            synth.set(\trackTempo, (track.bpm/60), \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
+            synth.set(\trackTempo, (track.bpm/60), \gain, 0.dbamp);//, \gain, track.preceivedDb.neg.dbamp);  // we set the tempo, and the gain, where gain is chosen such that the track ends up at 0dB again
             (deckNr.asString++", loadTrack: \t"++track.artist++", "++track.title).log(this);
             this.endOfTrackSched;
             

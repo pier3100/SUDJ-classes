@@ -578,6 +578,8 @@ Substring {
     filterKey { |key, bpm, distanceLow, distanceHigh, minorMajor|
         // filters the track array with respect to a reference key, whereby both the reference track and toBeFiltered tracks are repitched to the same bpm; only output tracks whose keyDistance is in between the distance tresholds
         var indices, minorMajorFiltered;
+        key.rootNote.postln;
+        bpm.postln;
         minorMajorFiltered = this;
         // filter based on minorMajor
         if(minorMajor == "major"){
